@@ -16,7 +16,7 @@ import('lucid-cardano').then((Lucid) => {
             return;
         }
     
-        let args = process.argv.slice(3);
+        let args = process.argv.slice(3).map((elem) => Buffer.from(elem).toString('hex'));
     
         let parameterizedValidator = Lucid.applyParamsToScript(compiledCode, args);
     

@@ -34,3 +34,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+launch.json
+
+plutus.json
+*.plutus
+*.addr
+*.skey
+*.vkey
