@@ -1,0 +1,11 @@
+1. Run aiken check, if errors update to latest version of aiken using aikup. 
+    a. May need to run aikup directly as PATH may be screwy, in /config/.aiken/bin/aikup
+    b. May need to mv old version of aiken out of /usr/local/bin/aiken
+
+2. Once aiken check is working, write validators as desired
+
+3. aiken build
+
+4. create addresses as per /scripts
+
+5. parameterize-validator.sh
