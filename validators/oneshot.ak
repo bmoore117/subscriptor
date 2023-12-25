@@ -1,3 +1,4 @@
+use aiken/bytearray
 use aiken/dict
 use aiken/list
 use aiken/transaction.{OutputReference, ScriptContext, Transaction} as tx
@@ -26,14 +27,15 @@ validator(ownerVk: VerificationKeyHash) {
 
     expect [(asset_name, amount)] =
       mint
+        |> value.from_minted_value
         |> value.tokens(policy_id)
         |> dict.to_list()
 
-    expect Some(0, _) = 
+    expect Some((0, _)) = 
       bytearray.index_of(asset_name, #"000643b0")
 
     expect True = 
-      list.has(context.transaction.extra_signatories, ownerVk)
+      list.has(transaction.extra_signatories, ownerVk)
 
     when rdmr is {
       Mint -> {
@@ -55,6 +57,7 @@ validator(token_name: ByteArray, policy_id: ByteArray) {
 
     expect [(asset_name, amount)] =
       mint
+        |> value.from_minted_value
         |> value.tokens(policy_id)
         |> dict.to_list()
 
