@@ -1,8 +1,14 @@
+if (require.main != module) {
+    console.log('This script only to be run from the command line');
+    return;
+}
+
+const plutusJson = require('./plutus.json');
+let plutusVersion = "Plutus" + plutusJson.preamble.plutusVersion.toUpperCase();
+
 const fs = require('node:fs');
 import('lucid-cardano').then((Lucid) => {
-    if (require.main === module) {
-        const plutusJson = require('./plutus.json');
-    
+    Lucid.Lucid.new().then((lucid) => {
         var compiledCode = "";
         for (const validator of plutusJson.validators) {
             if (validator.title === process.argv[2]) { // first 2 args are node <js file name>, so real args start at 3rd index
@@ -15,19 +21,23 @@ import('lucid-cardano').then((Lucid) => {
             console.log("Validator " + process.argv[2] + " not found");
             return;
         }
-    
-        let args = process.argv.slice(3).map((elem) => Buffer.from(elem).toString('hex'));
-    
-        let parameterizedValidator = Lucid.applyParamsToScript(compiledCode, args);
+
+        // if no args passed, we assume the script has no parameters
+        var parameterizedValidator = compiledCode;
+        if (process.argv.length > 2) {
+            let args = process.argv.slice(3).map((elem) => Buffer.from(elem).toString('hex'));
+            parameterizedValidator = Lucid.applyParamsToScript(compiledCode, args);
+        }
+
+        let scriptAddress = lucid.utils.validatorToAddress({type: plutusVersion, script: parameterizedValidator});
     
         try {
             fs.writeFileSync(process.argv[2] + ".plutus", parameterizedValidator);
-          } catch (err) {
+            fs.writeFileSync(process.argv[2] + ".addr", scriptAddress);
+        } catch (err) {
             console.error(err);
-          }
-    } else {
-        console.log('This script only to be run from the command line');
-    }
+        }
+    })
 });
 
 
