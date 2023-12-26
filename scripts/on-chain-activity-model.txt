@@ -1,0 +1,8 @@
+how do interdependent validators work?
+	it's a question on a couple levels
+		1. how are they deployed? It's two separate pieces of code that are output in the results of an aiken build, if I were to deploy them in the plutusv2 on-chain reference script style, it's really two transactions that I would need, right? Then that's two separate addresses, two separate end product UTXOs. How are they interdependent?
+		Answer: 
+            it IS two separate contracts. The deal is TX#1, using script #1 with which we mint and lock funds, sends the funds and the minted item to the address of script #2. In theory one could send the funds and minted items to the address of the minting contract, but it's a little unclear if one could then release them as it is a minting contract only, and not a spending one.
+			Then TX#2, with which we burn and redeem, uses script #1 to validate a burn of the minted item, and script #2, which controls spending the ADA at its address, has the ability to inspect the totality of the transaction to verify that a burn has happened before it releases funds.
+
+			So I think you could do this a couple ways. The way with the fewest transactions is not to deploy any scripts directly on chain, just send to hashes and post scripts in transactions as needed. PlutusV1 way. This way generates 2 transactions total. The PlutusV2 way is 4 transactions total, 2 to post scripts on-chain, and 2 to interact with them. More inefficient in this case, but much more efficient in cases where the contracts are meant to be interacted with repeatedly and at scale, such as in real world defi.
