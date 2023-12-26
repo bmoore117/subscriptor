@@ -42,3 +42,4 @@ plutus.json
 *.addr
 *.skey
 *.vkey
+*.tx
