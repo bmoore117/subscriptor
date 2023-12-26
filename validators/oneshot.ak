@@ -14,6 +14,8 @@ type Action {
   Burn
 }
 
+// Only the person who deployed the contract can mint or burn 
+// things that start with the CIP-68 reference token asset_name
 validator(ownerVk: VerificationKeyHash) {
   fn handle_subscription(rdmr: Action, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } =
@@ -47,7 +49,8 @@ validator(ownerVk: VerificationKeyHash) {
   }
 }
 
-validator(token_name: ByteArray, policy_id: ByteArray) {
+// Only the person who deployed the contract can unlock funds in it
+validator(ownerVk: VerificationKeyHash) {
   fn redeem(_d: Data, _r: Data, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, .. } =
       ctx
@@ -55,12 +58,6 @@ validator(token_name: ByteArray, policy_id: ByteArray) {
     let Transaction { mint, .. } =
       transaction
 
-    expect [(asset_name, amount)] =
-      mint
-        |> value.from_minted_value
-        |> value.tokens(policy_id)
-        |> dict.to_list()
-
-    amount == -1 && asset_name == token_name
+    list.has(transaction.extra_signatories, ownerVk)
   }
 }
