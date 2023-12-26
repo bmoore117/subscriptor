@@ -9,3 +9,5 @@
 4. create addresses as per /scripts
 
 5. parameterize-validator.sh
+
+6. deploy-contract.sh
