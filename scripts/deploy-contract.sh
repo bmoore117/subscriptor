@@ -3,9 +3,9 @@
 cardano-cli transaction build --babbage-era \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --change-address $(cat my_address.addr) \
- --tx-in "151ecca5d87609d2414e33b98ed9f0cda3a1fcc89ba7a4152738db6db4713dff#0" \
- --tx-out "$(cat $1.addr) 5000000 lovelace" \
- --tx-out-reference-script-file $1.plutus \
+ --tx-in $1 \
+ --tx-out "$(cat $2.addr) 5000000 lovelace" \
+ --tx-out-reference-script-file $2.plutus \
  --tx-out-datum-hash-file unit.json \
  --out-file raw.tx
 
