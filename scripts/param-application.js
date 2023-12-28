@@ -8,7 +8,17 @@ let plutusVersion = "Plutus" + plutusJson.preamble.plutusVersion.toUpperCase();
 
 const fs = require('node:fs');
 import('lucid-cardano').then((Lucid) => {
-    Lucid.Lucid.new(null, "Preview").then((lucid) => {
+
+    var network = "Custom";
+    if (process.env.CARDANO_NODE_MAGIC == 2) {
+        network = "Preview";
+    } else if (process.env.CARDANO_NODE_MAGIC == 1) {
+        network = "Preprod"
+    } else if (process.env.CARDANO_NODE_MAGIC == 764824073) {
+        network = "Mainnet"
+    }
+
+    Lucid.Lucid.new(null, network).then((lucid) => {
         var compiledCode = "";
         for (const validator of plutusJson.validators) {
             if (validator.title === process.argv[2]) { // first 2 args are node <js file name>, so real args start at 3rd index
