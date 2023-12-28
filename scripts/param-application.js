@@ -30,9 +30,15 @@ import('lucid-cardano').then((Lucid) => {
         }
 
         let scriptAddress = lucid.utils.validatorToAddress({type: plutusVersion, script: parameterizedValidator});
+
+        let output = {
+            type: "PlutusScript" + plutusJson.preamble.plutusVersion.toUpperCase(),
+            description: "",
+            cborHex: parameterizedValidator
+        };
     
         try {
-            fs.writeFileSync(process.argv[2] + ".plutus", parameterizedValidator);
+            fs.writeFileSync(process.argv[2] + ".plutus", JSON.stringify(output));
             fs.writeFileSync(process.argv[2] + ".addr", scriptAddress);
         } catch (err) {
             console.error(err);
