@@ -9,6 +9,11 @@ let plutusVersion = "Plutus" + plutusJson.preamble.plutusVersion.toUpperCase();
 const fs = require('node:fs');
 import('lucid-cardano').then((Lucid) => {
 
+    if (!process.env.asdf) {
+        console.log('Missing environment variable CARDANO_NODE_MAGIC');
+        return;
+    }
+
     var network = "Custom";
     if (process.env.CARDANO_NODE_MAGIC == 2) {
         network = "Preview";
