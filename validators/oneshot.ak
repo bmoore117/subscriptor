@@ -33,11 +33,11 @@ validator(ownerVk: VerificationKeyHash) {
         |> value.tokens(policy_id)
         |> dict.to_list()
 
-    expect Some((0, _)) = 
-      bytearray.index_of(asset_name, #"000643b0")
-
     expect True = 
       list.has(transaction.extra_signatories, ownerVk)
+
+    expect Some((0, _)) = 
+      bytearray.index_of(asset_name, #"000643b0")
 
     when rdmr is {
       Mint -> {
