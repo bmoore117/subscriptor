@@ -44,3 +44,4 @@ plutus.json
 *.vkey
 *.tx
 *.pol
+params.json
