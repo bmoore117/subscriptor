@@ -33,18 +33,19 @@ validator(ownerVk: VerificationKeyHash) {
         |> value.tokens(policy_id)
         |> dict.to_list()
 
-    expect True = 
-      list.has(transaction.extra_signatories, ownerVk)
-
-    expect Some((0, _)) = 
-      bytearray.index_of(asset_name, #"000643b0")
+    let signed = list.has(transaction.extra_signatories, ownerVk)
+    let contained =
+      when bytearray.index_of(asset_name, #"000643b0") is {
+        Some((0, _)) -> True
+        _other -> False
+      }
 
     when rdmr is {
       Mint -> {
-        amount == 1
+        (amount == 1)? && signed? && contained?
       }
       Burn ->
-        amount == -1
+        (amount == -1)? && signed? && contained?
     }
   }
 }
