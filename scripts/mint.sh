@@ -4,7 +4,7 @@ tokenname=$(echo -n "$4" | xxd -ps | tr -d '\n')
 tokenname="000643b0$tokenname"
 echo "Token name encoded: $tokenname"
 
-cardano-cli transaction build --babbage-era --testnet-magic ${CARDANO_NODE_MAGIC} \
+cardano-cli transaction build --testnet-magic ${CARDANO_NODE_MAGIC} \
  --tx-in $1 \
  --tx-in-collateral $1 \
  --mint-tx-in-reference $2 \
