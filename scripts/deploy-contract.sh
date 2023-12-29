@@ -1,9 +1,10 @@
 #!/bin/bash
 
-output=$(cardano-cli transaction calculate-min-required-utxo --babbage-era \
+output=$(cardano-cli transaction calculate-min-required-utxo \
  --protocol-params-file params.json \
  --tx-out-reference-script-file $2.plutus \
- --tx-out "$(cat $2.addr) + 0")
+ --tx-out-datum-hash-file unit.json \
+ --tx-out "$(cat $2.addr) + 0") 
 
 datacost=$(cut -d' ' -f2 <<< "$output")
 
