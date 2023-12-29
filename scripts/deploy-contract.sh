@@ -1,10 +1,19 @@
 #!/bin/bash
 
-cardano-cli transaction build --babbage-era \
+cardano-cli transaction calculate-min-required-utxo \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --change-address $(cat my_address.addr) \
  --tx-in $1 \
- --tx-out "$(cat $2.addr) 5000000 lovelace" \
+ --tx-out "$(cat $2.addr) $3 lovelace" \
+ --tx-out-reference-script-file $2.plutus \
+ --tx-out-datum-hash-file unit.json \
+ --out-file raw.tx
+
+cardano-cli transaction build \
+ --testnet-magic $CARDANO_NODE_MAGIC \
+ --change-address $(cat my_address.addr) \
+ --tx-in $1 \
+ --tx-out "$(cat $2.addr) 6335700 lovelace" \
  --tx-out-reference-script-file $2.plutus \
  --tx-out-datum-hash-file unit.json \
  --out-file raw.tx
