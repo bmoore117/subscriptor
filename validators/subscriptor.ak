@@ -10,12 +10,13 @@ type VerificationKeyHash =
   Hash<Blake2b_224, VerificationKey>
 
 type Action {
-  Mint
+  MintAnchor,
+  MintSpendingToken,
   Burn
 }
 
 // Only the person who deployed the contract can mint or burn 
-// things that start with the CIP-68 reference token asset_name
+// anchors or spending tokens - which together form a CIP-68 pair
 validator(ownerVk: VerificationKeyHash) {
   fn handle_subscription(rdmr: Action, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } =
@@ -34,15 +35,25 @@ validator(ownerVk: VerificationKeyHash) {
         |> dict.to_list()
 
     let signed = list.has(transaction.extra_signatories, ownerVk)
-    let contained =
+    let cip68ReferencePrefixed =
       when bytearray.index_of(asset_name, #"000643b0") is {
         Some((0, _)) -> True
         _other -> False
       }
 
+    let cip68NamesAndPolicyMatch = option.or_else(option.map(list.at(transaction.reference_inputs, 0), fn (input) {
+      let inputAssetName = input.output.value.asset_name
+      let inputPolicyId = input.output.value.policy_id
+      bytearray.compare(inputPolicyId, policy_id) == Equal 
+        && bytearray.compare(bytearray.concat(#"000de140", bytearray.drop(inputAssetName, 8)), asset_name) == Equal
+    }), False)
+
     when rdmr is {
-      Mint -> {
-        (amount == 1)? && signed? && contained?
+      MintAnchor -> {
+        (amount == 1)? && signed? && cip68ReferencePrefixed?
+      }
+      MintSpendingToken -> {
+        (amount == 1)? && signed? && cip68NamesAndPolicyMatch?
       }
       Burn ->
         (amount == -1)? && signed? && contained?
