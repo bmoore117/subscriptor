@@ -15,42 +15,81 @@ type Action {
   Burn
 }
 
+type SubscriptionDetails {
+  // POSIX time in second, e.g. 1672843961000
+  lock_until: Int,
+  
+  // amount in ADA to allow deducting
+  billable_amount: Int
+}
+
 // Only the person who deployed the contract can mint or burn 
-// anchors or spending tokens - which together form a CIP-68 pair
+// anchors or spending tokens - which together form a CIP-68 pair.
+// Also, only the owner or someone possessing a spending key can unlock funds
 validator(ownerVk: VerificationKeyHash) {
   fn handle_subscription(rdmr: Action, ctx: ScriptContext) -> Bool {
-    let ScriptContext { transaction, purpose } =
+    let ScriptContext { tx, purpose } =
       ctx
 
-    expect tx.Mint(policy_id) =
+    expect tx.Mint(own_policy_id) =
       purpose
 
-    let Transaction { inputs, mint, .. } =
-      transaction
+    let Transaction { inputs, mint, validity_range, .. } =
+      tx
 
     expect [(asset_name, amount)] =
       mint
         |> value.from_minted_value
-        |> value.tokens(policy_id)
+        |> value.tokens(own_policy_id)
         |> dict.to_list()
 
-    let signed = list.has(transaction.extra_signatories, ownerVk)
+    let signed = list.has(tx.extra_signatories, ownerVk)
     let cip68ReferencePrefixed =
       when bytearray.index_of(asset_name, #"000643b0") is {
         Some((0, _)) -> True
         _other -> False
       }
 
-    let cip68NamesAndPolicyMatch = option.or_else(option.map(list.at(transaction.reference_inputs, 0), fn (input) {
+    let cip68NamesAndPolicyMatch = option.or_else(option.map(list.at(tx.reference_inputs, 0), fn (input) {
       let inputAssetName = input.output.value.asset_name
-      let inputPolicyId = input.output.value.policy_id
-      bytearray.compare(inputPolicyId, policy_id) == Equal 
+      let inputPolicyId = input.output.value.own_policy_id
+      bytearray.compare(inputPolicyId, own_policy_id) == Equal 
         && bytearray.compare(bytearray.concat(#"000de140", bytearray.drop(inputAssetName, 8)), asset_name) == Equal
     }), False)
 
     when rdmr is {
       MintAnchor -> {
-        (amount == 1)? && signed? && cip68ReferencePrefixed?
+        expect [Output { datum: InlineDatum(output_datum), value, .. }] =
+          list.filter(
+            outputs,
+            fn(output) {
+              output.address.payment_credential == ScriptCredential(own_policy_id)
+            },
+          )
+
+        expect new_subscription_details: SubscriptionDetails = output_datum
+
+        let Interval {
+          upper_bound: IntervalBound {
+            bound_type: upper_range,
+            is_inclusive: upper_is_inclusive,
+          },
+          lower_bound: IntervalBound {
+            bound_type: lower_range,
+            is_inclusive: lower_is_inclusive,
+          },
+        } = validity_range
+
+        // requirement: Time range span is 3 minutes or less and inclusive
+        expect and {
+            !upper_is_inclusive?,
+            lower_is_inclusive?,
+            (upper_range - lower_range <= 180000)?,
+          }
+
+        // TODO recheck bounds
+        (amount == 1)? && signed? && cip68ReferencePrefixed? && (new_subscription_details.lock_until >= upper_range + 2592000000)? 
+          && new_subscription_details.billable_amount > 0
       }
       MintSpendingToken -> {
         (amount == 1)? && signed? && cip68NamesAndPolicyMatch?
@@ -59,17 +98,16 @@ validator(ownerVk: VerificationKeyHash) {
         (amount == -1)? && signed? && contained?
     }
   }
-}
 
-// Only the person who deployed the contract can unlock funds in it
-validator(ownerVk: VerificationKeyHash) {
   fn redeem(_d: Data, _r: Data, ctx: ScriptContext) -> Bool {
-    let ScriptContext { transaction, .. } =
+    let ScriptContext { tx, .. } =
       ctx
 
     let Transaction { mint, .. } =
-      transaction
+      tx
 
-    list.has(transaction.extra_signatories, ownerVk)
+    list.has(tx.extra_signatories, ownerVk)
   }
 }
+
+
