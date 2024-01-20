@@ -1,17 +1,19 @@
 use aiken/bytearray
 use aiken/dict
 use aiken/list
-use aiken/transaction.{OutputReference, ScriptContext, Transaction} as tx
+use aiken/option
+use aiken/interval.{Finite, Interval, IntervalBound}
+use aiken/transaction.{InlineDatum, Output, OutputReference, ScriptContext, Transaction} as tx
 use aiken/transaction/value
-use aiken/transaction/credential.{VerificationKey}
+use aiken/transaction/credential.{ScriptCredential, VerificationKey}
 use aiken/hash.{Blake2b_224, Hash}
 
 type VerificationKeyHash =
   Hash<Blake2b_224, VerificationKey>
 
 type Action {
-  MintAnchor,
-  MintSpendingToken,
+  MintAnchor
+  MintSpendingToken
   Burn
 }
 
@@ -28,14 +30,14 @@ type SubscriptionDetails {
 // Also, only the owner or someone possessing a spending key can unlock funds
 validator(ownerVk: VerificationKeyHash) {
   fn handle_subscription(rdmr: Action, ctx: ScriptContext) -> Bool {
-    let ScriptContext { tx, purpose } =
+    let ScriptContext { transaction, purpose } =
       ctx
 
     expect tx.Mint(own_policy_id) =
       purpose
 
-    let Transaction { inputs, mint, validity_range, .. } =
-      tx
+    let Transaction { inputs, outputs, mint, validity_range, .. } =
+      transaction
 
     expect [(asset_name, amount)] =
       mint
@@ -43,19 +45,32 @@ validator(ownerVk: VerificationKeyHash) {
         |> value.tokens(own_policy_id)
         |> dict.to_list()
 
-    let signed = list.has(tx.extra_signatories, ownerVk)
+    let signed = list.has(transaction.extra_signatories, ownerVk)
     let cip68ReferencePrefixed =
       when bytearray.index_of(asset_name, #"000643b0") is {
         Some((0, _)) -> True
         _other -> False
       }
 
-    let cip68NamesAndPolicyMatch = option.or_else(option.map(list.at(tx.reference_inputs, 0), fn (input) {
-      let inputAssetName = input.output.value.asset_name
-      let inputPolicyId = input.output.value.own_policy_id
-      bytearray.compare(inputPolicyId, own_policy_id) == Equal 
-        && bytearray.compare(bytearray.concat(#"000de140", bytearray.drop(inputAssetName, 8)), asset_name) == Equal
-    }), False)
+    let cip68NamesAndPolicyMatch = list.any(transaction.reference_inputs, fn (input) {
+      expect [(policy1, amount1), (policy2, amount2)] =
+        input.output.value
+          |> value.to_dict
+          |> dict.to_list()
+
+      if policy1 == value.ada_policy_id {
+        // Should always reach here since maps come in ordered on chain
+        expect [(token_name, quantity)] = amount2 |> dict.to_list()
+        
+        policy2 == own_policy_id && quantity == 1 && bytearray.compare(bytearray.concat(#"000de140", 
+          bytearray.drop(token_name, 8)), asset_name) == Equal
+      } else {
+        expect [(token_name, quantity)] = amount1 |> dict.to_list()
+        
+        policy1 == own_policy_id && quantity == 1 && bytearray.compare(bytearray.concat(#"000de140", 
+          bytearray.drop(token_name, 8)), asset_name) == Equal
+      }
+    })
 
     when rdmr is {
       MintAnchor -> {
@@ -80,15 +95,18 @@ validator(ownerVk: VerificationKeyHash) {
           },
         } = validity_range
 
+        expect Finite(upper_range_value) = upper_range
+        expect Finite(lower_range_value) = lower_range
+
         // requirement: Time range span is 3 minutes or less and inclusive
         expect and {
             !upper_is_inclusive?,
             lower_is_inclusive?,
-            (upper_range - lower_range <= 180000)?,
+            (upper_range_value - lower_range_value <= 180000)?,
           }
 
         // TODO recheck bounds
-        (amount == 1)? && signed? && cip68ReferencePrefixed? && (new_subscription_details.lock_until >= upper_range + 2592000000)? 
+        (amount == 1)? && signed? && cip68ReferencePrefixed? && (new_subscription_details.lock_until >= upper_range_value + 2592000000)? 
           && new_subscription_details.billable_amount > 0
       }
       MintSpendingToken -> {
