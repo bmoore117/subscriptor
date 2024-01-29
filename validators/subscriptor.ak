@@ -31,6 +31,8 @@ type SubscriptionDetails {
 // NB: since we need to update the datum of the anchor after every spend token mint, we need to move and "spend" the anchor on each mint
 // so if we can move it from the deposit contract to the deposit contract, a 0-move move, that's fine, otherwise we'll need a bag of holding 
 // together with the deposit contract to bounce the anchor in and out of and generate new datums with
+
+// TODO: ensure new output datum exists in transaction for anchor on spending token mint
 validator(ownerVk: VerificationKeyHash) {
   fn handle_subscription(rdmr: Action, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } =
