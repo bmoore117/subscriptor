@@ -15,36 +15,7 @@ fn determine_date(posix_time: Int) -> String {
     posix_time
   }
 
-  let yins = 31536000
-  let lyins = 31622400
-
-  let is_leap_year =
-    if year % 4 == 0 {
-      if year % 100 == 0 {
-        if year % 400 == 0 {
-          True
-        } else {
-          False
-        }
-      } else {
-        True
-      }
-    } else {
-      False
-    }
-
-  let t =
-    if is_leap_year {
-      lyins
-    } else {
-      yins
-    }
-
-  if posix_time / t > 0 {
-    determine_date_inner(posix_time - t, year + 1)
-  } else {
-    day_of_the_year_to_date(year, posix_time, is_leap_year)
-  }
+  determine_date_inner(posix_time, year)
 }
 
 fn determine_date_inner(posix_time: Int, year: Int) -> String {
