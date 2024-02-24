@@ -7,12 +7,15 @@ use aiken/transaction.{
   InlineDatum, Input, Output, ScriptContext, Spend, Transaction,
 } as tx
 use aiken/transaction/credential.{
-  ScriptCredential, VerificationKey, VerificationKeyCredential,
+  Script, ScriptCredential, VerificationKey, VerificationKeyCredential,
 }
 use aiken/transaction/value
 
 type VerificationKeyHash =
   Hash<Blake2b_224, VerificationKey>
+
+type ScriptCredentialHash =
+  Hash<Blake2b_224, Script>
 
 type Action {
   MintAnchor
@@ -29,6 +32,11 @@ type SubscriptionDetails {
   merchant_vk: VerificationKeyHash,
 }
 
+type PlatformFeeSchedule {
+  fee_percentage: Int,
+  platform_vk: VerificationKeyHash,
+}
+
 // Only the person who deployed the contract can mint or burn CIP 68 reference tokens, which detail a subscription. 
 // The merchant a user has subscribed to can mint a single spending token per month which corresponds to an existing reference token 
 // and allows the merchant to collect only the amount due from amounts held in user deposit governed contract UTXOs. 
@@ -39,7 +47,10 @@ type SubscriptionDetails {
 // number of years will also give number of leap days
 // then subtract days by month, when the number of seconds left is less than a day's worth, you have arrived at the date
 // recursion is the only way to loop so do it recursively
-validator(owner_vk: VerificationKeyHash, platform_vk: VerificationKeyHash) {
+validator(
+  owner_vk: VerificationKeyHash,
+  platform_policy_id: ScriptCredentialHash,
+) {
   fn handle_subscription(rdmr: Action, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
 
@@ -99,8 +110,8 @@ validator(owner_vk: VerificationKeyHash, platform_vk: VerificationKeyHash) {
 
         expect new_subscription_details: SubscriptionDetails = output_datum
 
-        // 1 anchor is minted by the owner, having the correct cip68 prefix, with a next billing date of 1 month from now, and a nonzero billing amount
-        (amount == 1)? && signed? && cip_68_reference_prefixed? && (new_subscription_details.lock_until >= upper_range_value + 2592000000)? && (new_subscription_details.billable_amount > 0)?
+        // 1 anchor is minted by the owner, having the correct cip68 prefix, with a next billing date of 5 minutes from now, and a nonzero billing amount
+        (amount == 1)? && signed? && cip_68_reference_prefixed? && (new_subscription_details.lock_until >= upper_range_value + 300)? && (new_subscription_details.billable_amount > 0)?
       }
       MintSpendingToken -> {
         // expect the anchor token to be in the reference inputs as we mint the corresponding spending token
@@ -220,42 +231,63 @@ validator(owner_vk: VerificationKeyHash, platform_vk: VerificationKeyHash) {
       expect
         (details.billable_amount == output_details.billable_amount)? && (details.merchant_vk == output_details.merchant_vk)? && (details.lock_until + 2592000000 == output_details.lock_until)?
 
-      // expect outputs to either go to the merchant or back to the deposit
-      expect
-        list.all(
-          outputs,
-          fn(output) {
-            output.address.payment_credential == ScriptCredential(own_policy_id) || output.address.payment_credential == VerificationKeyCredential(
-              details.merchant_vk,
-            )
-          },
-        )
-
-      // get all outputs going to merchant
-      let merchant_outputs =
-        list.filter(
-          outputs,
-          fn(output) {
-            output.address.payment_credential == VerificationKeyCredential(
-              details.merchant_vk,
-            )
-          },
-        )
-
-      // expect total value going to merchant to be exactly billable amount 
+      // expect total value going to merchant to be <= billable amount 
       expect
         list.foldl(
-          merchant_outputs,
+          outputs,
           0,
           fn(output, total) {
-            expect [(_ada_asset_name, ada_amount)] =
-              output.value
-                |> value.tokens(value.ada_policy_id)
-                |> dict.to_list()
-            ada_amount + total
+            if
+            output.address.payment_credential == VerificationKeyCredential(
+              details.merchant_vk,
+            ){
+            
+              expect [(_ada_asset_name, ada_amount)] =
+                output.value
+                  |> value.tokens(value.ada_policy_id)
+                  |> dict.to_list()
+              ada_amount + total
+            } else {
+              total + 0
+            }
           },
-        ) == details.billable_amount
-      // TODO: lookup platform fee schedule nft in reference inputs by policy ID, itself another CIP68 anchor, and ensure there is an output going to the platform with the correct amount
+        ) <= details.billable_amount
+      expect [platform_input] =
+        list.filter(
+          reference_inputs,
+          fn(input) {
+            value.quantity_of(
+              input.output.value,
+              platform_policy_id,
+              // "PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
+              #"000643b0506c6174666f726d4665655363686564756c65",
+            ) == 1
+          },
+        )
+      expect InlineDatum(platform_datum_value) = platform_input.output.datum
+      expect platform_details: PlatformFeeSchedule = platform_datum_value
+
+      // platform collects a percentage of the total going to the merchant
+      expect
+        list.foldl(
+          outputs,
+          0,
+          fn(output, total) {
+            if (output.address.payment_credential == VerificationKeyCredential(
+              platform_details.platform_vk,
+            )) {
+            
+              expect [(_ada_asset_name, ada_amount)] =
+                output.value
+                  |> value.tokens(value.ada_policy_id)
+                  |> dict.to_list()
+              ada_amount + total
+            } else {
+              total + 0
+            }
+          },
+        ) == platform_details.fee_percentage * details.billable_amount / 100
+      // if every condition met thus far, return true
       True
     }
   }
