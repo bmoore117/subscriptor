@@ -33,7 +33,7 @@ type SubscriptionDetails {
 }
 
 type PlatformFeeSchedule {
-  fee_percentage: Int,
+  fee_percentage_basis_points: Int,
   platform_vk: VerificationKeyHash,
 }
 
@@ -286,7 +286,7 @@ validator(
               total + 0
             }
           },
-        ) == platform_details.fee_percentage * details.billable_amount / 100
+        ) == platform_details.fee_percentage_basis_points * details.billable_amount / 1000
       // if every condition met thus far, return true
       True
     }

@@ -1,14 +1,11 @@
 #!/bin/bash
 
-script=$(
-    cat <<EOF
+cat <<EOF > platform-policy.script
 {
     "type": "sig",
     "keyHash": "$(cardano-cli address key-hash --payment-verification-key-file platform.vkey)"
 }
 EOF
-)
-echo $script >> platform-policy.script
 
 cardano-cli transaction policyid --script-file ./platform-policy.script > platform-policy.id
 output=$(cardano-cli query utxo --address $(cat platform.addr) --testnet-magic $CARDANO_NODE_MAGIC)
@@ -20,7 +17,7 @@ funds=$(echo $output | cut -d ' ' -f7)
 policyid=$(cat platform-policy.id)
 #"PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
 tokenname="000643b0506c6174666f726d4665655363686564756c65"
-$mint="1 $policyid.$tokenname"
+mint="1 $policyid.$tokenname"
 
 json_data=$(cat platform-metadata.json)
 
