@@ -15,7 +15,7 @@ cardano-cli transaction build --testnet-magic ${CARDANO_NODE_MAGIC} \
  --tx-in-collateral $1 \
  --mint-tx-in-reference $2 \
  --mint-plutus-script-v2 \
- --mint-reference-tx-in-redeemer-file ./mint-redeemer.json \
+ --mint-reference-tx-in-redeemer-file unit.json \
  --policy-id $(cat $3.pol) \
  --mint "1 $(cat $3.pol).$tokenname" \
  --tx-out $(cat $3.addr)+$datacost+"1 $(cat $3.pol).$tokenname" \

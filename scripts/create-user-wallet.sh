@@ -1,5 +1,5 @@
 #!/bin/bash
 
-cardano-cli address key-gen --verification-key-file user.vkey --signing-key-file user.skey
+cardano-cli address key-gen --verification-key-file intermediate/user.vkey --signing-key-file intermediate/user.skey
 
-cardano-cli address build --payment-verification-key-file user.vkey --out-file user.addr --testnet-magic $CARDANO_NODE_MAGIC
+cardano-cli address build --payment-verification-key-file intermediate/user.vkey --out-file intermediate/user.addr --testnet-magic $CARDANO_NODE_MAGIC

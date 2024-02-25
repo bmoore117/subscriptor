@@ -45,3 +45,5 @@ plutus.json
 *.tx
 *.pol
 params.json
+
+scripts/intermediate
