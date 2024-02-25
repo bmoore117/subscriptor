@@ -31,7 +31,7 @@ datacost=$(cut -d' ' -f2 <<< "$output")
 cardano-cli transaction build \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-in $txhash#$txix \
- --tx-out $address+$datacost+$mint \
+ --tx-out $address+$datacost+"$mint" \
  --change-address $address \
  --mint="1 $policyid.$tokenname" \
  --minting-script-file intermediate/platform-policy.script \
@@ -40,7 +40,7 @@ cardano-cli transaction build \
 
 cardano-cli transaction sign \
  --tx-body-file intermediate/platform-schedule-raw.tx \
- --signing-key-file ./platform.skey \
+ --signing-key-file intermediate/platform.skey \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --out-file intermediate/platform-schedule-signed.tx
 
