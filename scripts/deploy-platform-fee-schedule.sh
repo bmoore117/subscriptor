@@ -10,11 +10,11 @@ EOF
 cardano-cli transaction policyid --script-file intermediate/platform-policy.script > intermediate/platform-policy.id
 output=$(cardano-cli query utxo --address $(cat intermediate/platform.addr) --testnet-magic $CARDANO_NODE_MAGIC)
 
-address=$(cat platform.addr)
+address=$(cat intermediate/platform.addr)
 txhash=$(echo $output | cut -d ' ' -f5)
 txix=$(echo $output | cut -d ' ' -f6)
 funds=$(echo $output | cut -d ' ' -f7)
-policyid=$(cat platform-policy.id)
+policyid=$(cat intermediate/platform-policy.id)
 #"PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
 tokenname="000643b0506c6174666f726d4665655363686564756c65"
 mint="1 $policyid.$tokenname"
