@@ -19,7 +19,6 @@ type ScriptCredentialHash =
 
 type Action {
   MintAnchor
-  MintSpendingToken
   Burn
 }
 
@@ -110,33 +109,9 @@ validator(
 
         expect new_subscription_details: SubscriptionDetails = output_datum
 
-        // 1 anchor is minted by the owner, having the correct cip68 prefix, with a next billing date of 5 minutes from now, and a nonzero billing amount
-        (amount == 1)? && signed? && cip_68_reference_prefixed? && (new_subscription_details.lock_until >= upper_range_value + 300)? && (new_subscription_details.billable_amount > 0)?
-      }
-      MintSpendingToken -> {
-        // expect the anchor token to be in the reference inputs as we mint the corresponding spending token
-        expect [anchor_input] =
-          list.filter(
-            reference_inputs,
-            fn(input) {
-              value.quantity_of(
-                input.output.value,
-                own_policy_id,
-                bytearray.concat(
-                  #"000643b0",
-                  bytearray.drop(minted_asset_name, 8),
-                ),
-              ) == 1
-            },
-          )
-        // expect it to have a datum
-        expect InlineDatum(anchor_datum_value) = anchor_input.output.datum
-        expect details: SubscriptionDetails = anchor_datum_value
-
-        // allow minting of 1 spending token by the merchant if we're past the last billing date, i.e. one month has elapsed since the last time of billing
-        (amount == 1)? && (lower_range_value >= details.lock_until)? && list.has(
-          transaction.extra_signatories,
-          details.merchant_vk,
+        // 1 anchor is minted by the owner, having the correct cip68 prefix, with a next billing date of 5 minutes from now, a nonzero billing amount, and a non-empty merchant_vk
+        (amount == 1)? && signed? && cip_68_reference_prefixed? && (new_subscription_details.lock_until >= upper_range_value + 300)? && (new_subscription_details.billable_amount > 0)? && !bytearray.is_empty(
+          new_subscription_details.merchant_vk,
         )?
       }
       // TODO is it possible to check if the merchant is signing here? and then OR with owner check as well
@@ -174,14 +149,11 @@ validator(
 
       // using our policy ID to lookup, bind the spending token asset name and amount to variables
       // they should be present in mint as things that are being burnt
-      expect [(spending_token_asset_name, amount)] =
+      expect [(subscription_details_asset_name, amount)] =
         mint
           |> value.from_minted_value
           |> value.tokens(own_policy_id)
           |> dict.to_list()
-
-      // expect us to burn this token
-      expect (amount == -1)?
 
       // find the subscription anchor in the inputs, should be 1 of 2 possibles to spend, the other being just deposits with ada in them.
       expect [anchor_input] =
@@ -191,10 +163,7 @@ validator(
             value.quantity_of(
               input.output.value,
               own_policy_id,
-              bytearray.concat(
-                #"000643b0",
-                bytearray.drop(spending_token_asset_name, 8),
-              ),
+              subscription_details_asset_name,
             ) == 1
           },
         )
@@ -215,10 +184,7 @@ validator(
             value.quantity_of(
               output.value,
               own_policy_id,
-              bytearray.concat(
-                #"000643b0",
-                bytearray.drop(spending_token_asset_name, 8),
-              ),
+              subscription_details_asset_name,
             ) == 1 && output.address.payment_credential == ScriptCredential(
               own_policy_id,
             )
@@ -231,7 +197,7 @@ validator(
       expect
         (details.billable_amount == output_details.billable_amount)? && (details.merchant_vk == output_details.merchant_vk)? && (details.lock_until + 2592000000 == output_details.lock_until)?
 
-      // expect total value going to merchant to be <= billable amount 
+      // expect total value going to merchant to be == billable amount 
       expect
         list.foldl(
           outputs,
@@ -251,7 +217,8 @@ validator(
               total + 0
             }
           },
-        ) <= details.billable_amount
+        ) == details.billable_amount
+      // expect the platform fee schedule to be in the reference inputs
       expect [platform_input] =
         list.filter(
           reference_inputs,
@@ -273,9 +240,10 @@ validator(
           outputs,
           0,
           fn(output, total) {
-            if (output.address.payment_credential == VerificationKeyCredential(
+            if
+            output.address.payment_credential == VerificationKeyCredential(
               platform_details.platform_vk,
-            )) {
+            ){
             
               expect [(_ada_asset_name, ada_amount)] =
                 output.value
