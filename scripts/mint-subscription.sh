@@ -46,7 +46,7 @@ cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
  --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/user.vkey) \
  --invalid-before $lower_slot \
  --invalid-hereafter $upper_slot \
- --change-address $(cat subscriptor.handle_subscription.addr) \
+ --change-address $(cat intermediate/user.addr) \
  --out-file intermediate/mint-raw.tx
 
 cardano-cli transaction sign \
