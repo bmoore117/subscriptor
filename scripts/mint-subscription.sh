@@ -24,10 +24,6 @@ output=$(cardano-cli query utxo --address $(cat subscriptor.handle_subscription.
 minter_script_tx_hash=$(echo $output | cut -d ' ' -f5)
 minter_script_tx_ix=$(echo $output | cut -d ' ' -f6)
 
-output=$(./query-platform-balance.sh)
-platform_reference_input_tx=$(echo $output | cut -d ' ' -f5)
-platform_reference_input_ix=$(echo $output | cut -d ' ' -f6)
-
 lower_slot=$(cardano-cli query slot-number $(date -u +"%Y-%m-%dT%H:%M:%SZ") --testnet-magic $CARDANO_NODE_MAGIC)
 upper_seconds=$(date +%s -d "+3 minute")
 upper_date=$(date --date="@$upper_seconds" +"%Y-%m-%dT%H:%M:%SZ")
@@ -39,7 +35,6 @@ node create-subscription-datum.js $upper_seconds
 cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-in $txhash#$txix \
  --tx-in-collateral $txhash#$txix \
- --read-only-tx-in-reference $platform_reference_input_tx#$platform_reference_input_ix \
  --mint-tx-in-reference $minter_script_tx_hash#$minter_script_tx_ix \
  --mint-plutus-script-v2 \
  --mint-reference-tx-in-redeemer-file unit.json \
