@@ -42,7 +42,7 @@ import('lucid-cardano').then((Lucid) => {
         let data = fs.readFileSync('./intermediate/merchant.vkey');
         let dataJson = JSON.parse(data);
         let resultHex = Lucid.Data.to(
-            { lock_until: BigInt(process.argv[2]) + 300n, billable_amount: 5000n, merchant_vk: dataJson.cborHex  },
+            { lock_until: (BigInt(process.argv[2]) + 300n)*1000n, billable_amount: 5000n, merchant_vk: dataJson.cborHex  },
             SubscriptionDetails,
         );
 
