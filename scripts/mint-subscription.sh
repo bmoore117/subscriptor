@@ -11,7 +11,7 @@ json_data=$(cat intermediate/subscription-metadata.json)
 
 output=$(cardano-cli transaction calculate-min-required-utxo \
  --protocol-params-file intermediate/params.json \
- --tx-out-inline-datum-value $json_data \
+ --tx-out-inline-datum-file intermediate/subscription-metadata.json \
  --tx-out $(cat subscriptor.handle_subscription.addr)+0+"1 $(cat subscriptor.handle_subscription.pol).$tokenname")
 
 datacost=$(cut -d' ' -f2 <<< "$output")
@@ -28,8 +28,12 @@ output=$(./query-platform-balance.sh)
 platform_reference_input_tx=$(echo $output | cut -d ' ' -f5)
 platform_reference_input_ix=$(echo $output | cut -d ' ' -f6)
 
-lower_slot=$(cardano-cli query slot-number $(date -d +-u +"%Y-%m-%dT%H:%M:%SZ") --testnet-magic $CARDANO_NODE_MAGIC)
-upper_slot=$(cardano-cli query slot-number $(date -d +-u +"%Y-%m-%dT%H:%M:%SZ" -d "+3 minute") --testnet-magic $CARDANO_NODE_MAGIC)
+lower_slot=$(cardano-cli query slot-number $(date -u +"%Y-%m-%dT%H:%M:%SZ") --testnet-magic $CARDANO_NODE_MAGIC)
+upper_seconds=$(date +%s -d "+3 minute")
+upper_date=$(date --date="@$upper_seconds" +"%Y-%m-%dT%H:%M:%SZ")
+upper_slot=$(cardano-cli query slot-number $upper_date --testnet-magic $CARDANO_NODE_MAGIC)
+
+node create-subscription-datum.js $upper_seconds
 
 #tx-in and mint-tx-in should be the same? use the user's money in the contract?
 cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
@@ -41,8 +45,8 @@ cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
  --mint-reference-tx-in-redeemer-file unit.json \
  --policy-id $(cat subscriptor.handle_subscription.pol) \
  --mint "1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
- --tx-out-inline-datum-value $json_data \
  --tx-out $(cat subscriptor.handle_subscription.addr)+$datacost+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
+ --tx-out-inline-datum-file intermediate/subscription-metadata.json \
  --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/user.vkey) \
  --invalid-before $lower_slot \
  --invalid-hereafter $upper_slot \

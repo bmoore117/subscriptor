@@ -1,4 +1,5 @@
 use aiken/bytearray
+use aiken/string
 use aiken/dict
 use aiken/hash.{Blake2b_224, Hash}
 use aiken/interval.{Finite, Interval, IntervalBound}
@@ -64,7 +65,9 @@ validator(
         |> value.tokens(own_policy_id)
         |> dict.to_list()
 
-    let signed = list.has(transaction.extra_signatories, owner_vk)
+    expect list.has(transaction.extra_signatories, owner_vk)
+    trace bytearray.to_hex(owner_vk)
+    trace bytearray.to_hex(list.reduce(transaction.extra_signatories, #"", bytearray.concat))
     let Interval {
       upper_bound: IntervalBound {
         bound_type: upper_range,
@@ -78,14 +81,18 @@ validator(
 
     expect Finite(upper_range_value) = upper_range
     expect Finite(lower_range_value) = lower_range
+    trace "Here 1"
+    trace string.from_int(upper_range_value)
+    trace string.from_int(lower_range_value)
 
     // requirement: this transaction was minted with a three minute or less validity range
     // so we have some bound on when "now" is
     expect and {
-        !upper_is_inclusive?,
+        (!upper_is_inclusive)?,
         lower_is_inclusive?,
         (upper_range_value - lower_range_value <= 180000)?,
       }
+    trace "Here 2"
 
     when rdmr is {
       MintAnchor -> {
@@ -95,6 +102,7 @@ validator(
             Some((0, _)) -> True
             _other -> False
           }
+        trace "Here 3"
 
         // anchor needs to go to a UTXO at this script's address, which must also have an inline datum. There should only be 1 output datum across all the outputs
         expect [Output { datum: InlineDatum(output_datum), .. }] =
@@ -106,11 +114,15 @@ validator(
               )
             },
           )
+        trace "Here 4"
 
         expect new_subscription_details: SubscriptionDetails = output_datum
+        trace "Here 5"
+        trace string.from_int(new_subscription_details.lock_until)
+        trace string.from_int(upper_range_value + 300000)
 
         // 1 anchor is minted by the owner, having the correct cip68 prefix, with a next billing date of 5 minutes from now, a nonzero billing amount, and a non-empty merchant_vk
-        (amount == 1)? && signed? && cip_68_reference_prefixed? && (new_subscription_details.lock_until >= upper_range_value + 300)? && (new_subscription_details.billable_amount > 0)? && !bytearray.is_empty(
+        (amount == 1)? && cip_68_reference_prefixed? && (new_subscription_details.lock_until >= upper_range_value + 300000)? && (new_subscription_details.billable_amount > 0)? && !bytearray.is_empty(
           new_subscription_details.merchant_vk,
         )?
       }

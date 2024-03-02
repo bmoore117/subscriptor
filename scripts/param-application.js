@@ -40,7 +40,7 @@ import('lucid-cardano').then((Lucid) => {
         // if no args passed, we assume the script has no parameters
         var parameterizedValidator = compiledCode;
         if (process.argv.length > 2) {
-            let args = process.argv.slice(3).map((elem) => Buffer.from(elem).toString('hex'));
+            let args = process.argv.slice(3).map((elem) => Buffer.from(elem).toString());
             parameterizedValidator = Lucid.applyParamsToScript(compiledCode, args);
         }
 

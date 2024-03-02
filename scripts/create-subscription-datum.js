@@ -6,9 +6,29 @@ if (require.main != module) {
 const jsonify = (param) => {
     return JSON.stringify(
         param,
-        (key, value) => (typeof value === "bigint" ? value.toString() : value) // return everything else unchanged
+        (key, value) => (typeof value === "bigint" || Number.isInteger(value) ? Number.parseInt(value.toString()) : value) // return everything else unchanged
     );
 };
+
+function expandData(obj) {
+    let result = {};
+    Object.entries(obj).forEach(([key, value]) => {
+        if (key === "index") {
+            result["constructor"] = value;
+        } else {
+            let arr = [];
+            value.forEach((item) => {
+                if (Number.isInteger(item) || typeof item === "bigint") {
+                    arr.push({int: item});
+                } else if (typeof item === "string") {
+                    arr.push({bytes: item});
+                }
+            });
+            result[key] = arr;
+        }
+    });
+    return result;
+}
 
 const fs = require('node:fs');
 import('lucid-cardano').then((Lucid) => {
@@ -22,12 +42,12 @@ import('lucid-cardano').then((Lucid) => {
         let data = fs.readFileSync('./intermediate/merchant.vkey');
         let dataJson = JSON.parse(data);
         let resultHex = Lucid.Data.to(
-            { lock_until: BigInt(Math.floor(Date.now() / 1000)), billable_amount: 5000n, merchant_vk: dataJson.cborHex  },
+            { lock_until: BigInt(process.argv[2]) + 300n, billable_amount: 5000n, merchant_vk: dataJson.cborHex  },
             SubscriptionDetails,
         );
 
         let resultObj = Lucid.Data.from(resultHex);
-        fs.writeFileSync("intermediate/subscription-metadata.json", jsonify(resultObj));
+        fs.writeFileSync("intermediate/subscription-metadata.json", jsonify(expandData(resultObj)));
     } catch (err) {
         console.error(err);
     }
