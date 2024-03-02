@@ -60,8 +60,7 @@ validator(
 
     expect tx.Mint(own_policy_id) = purpose
 
-    let Transaction { outputs, mint, validity_range, .. } =
-      transaction
+    let Transaction { outputs, mint, validity_range, .. } = transaction
 
     expect [(minted_asset_name, amount)] =
       mint
