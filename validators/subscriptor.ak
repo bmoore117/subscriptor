@@ -3,7 +3,6 @@ use aiken/dict
 use aiken/hash.{Blake2b_224, Hash}
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
-use aiken/string
 use aiken/transaction.{
   InlineDatum, Input, Output, ScriptContext, Spend, Transaction,
 } as tx
@@ -18,9 +17,14 @@ type VerificationKeyHash =
 type ScriptCredentialHash =
   Hash<Blake2b_224, Script>
 
-type Action {
+type MintAction {
   MintAnchor
   Burn
+}
+
+type WithdrawalAction {
+  Withdraw
+  CollectPayment
 }
 
 type SubscriptionDetails {
@@ -51,12 +55,12 @@ validator(
   owner_vk: VerificationKeyHash,
   platform_policy_id: ScriptCredentialHash,
 ) {
-  fn handle_subscription(rdmr: Action, ctx: ScriptContext) -> Bool {
+  fn handle_subscription(rdmr: MintAction, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
 
     expect tx.Mint(own_policy_id) = purpose
 
-    let Transaction { reference_inputs, outputs, mint, validity_range, .. } =
+    let Transaction { outputs, mint, validity_range, .. } =
       transaction
 
     expect [(minted_asset_name, amount)] =
@@ -121,15 +125,15 @@ validator(
     }
   }
 
-  fn redeem(_d: Data, _r: Data, ctx: ScriptContext) -> Bool {
+  fn redeem(_d: Data, rdmr: WithdrawalAction, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
     let Transaction { inputs, outputs, reference_inputs, mint, .. } =
       transaction
 
-    if list.has(transaction.extra_signatories, owner_vk) {
+    if rdmr == Withdraw && list.has(transaction.extra_signatories, owner_vk) {
       // owner can always pull money out for any reason just like a debit card, it's their account
       True
-    } else {
+    } else if rdmr == CollectPayment {
       // work our way to our own policy id, which should be the same as our own validator hash
       expect Spend(own_reference) = purpose
       expect Some(input) =
@@ -151,7 +155,7 @@ validator(
 
       // using our policy ID to lookup, bind the spending token asset name and amount to variables
       // they should be present in mint as things that are being burnt
-      expect [(subscription_details_asset_name, amount)] =
+      expect [(subscription_details_asset_name, _amount)] =
         mint
           |> value.from_minted_value
           |> value.tokens(own_policy_id)
@@ -259,6 +263,8 @@ validator(
         ) == platform_details.fee_percentage_basis_points * details.billable_amount / 1000
       // if every condition met thus far, return true
       True
+    } else {
+      False
     }
   }
 }
