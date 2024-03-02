@@ -124,6 +124,7 @@ validator(
     }
   }
 
+  //TODO: need to ensure we aren't inadvertently spending any other subscription UTXOs, only the target
   fn redeem(_d: Data, rdmr: WithdrawalAction, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
     let Transaction { inputs, outputs, reference_inputs, mint, .. } =
