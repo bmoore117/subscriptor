@@ -264,6 +264,7 @@ validator(
       // if every condition met thus far, return true
       True
     } else {
+      // We didn't pass Withdraw or CollectPayment in the redeemer, or didn't have deposit owner signature for a Withdraw
       False
     }
   }
