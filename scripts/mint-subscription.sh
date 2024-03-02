@@ -59,6 +59,10 @@ cardano-cli transaction sign \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --out-file intermediate/mint-signed.tx
 
+# for some reason, cardano-cli query slot-number above will give future slots, even for the current time. 
+# Just sleep a bit to get in range
+ sleep 20
+
 cardano-cli transaction submit \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-file intermediate/mint-signed.tx
