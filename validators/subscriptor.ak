@@ -1,10 +1,12 @@
+use aiken/builtin
 use aiken/bytearray
 use aiken/dict
 use aiken/hash.{Blake2b_224, Hash}
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
+use aiken/option
 use aiken/transaction.{
-  InlineDatum, Input, Output, ScriptContext, Spend, Transaction,
+  InlineDatum, Input, NoDatum, Output, ScriptContext, Spend, Transaction,
 } as tx
 use aiken/transaction/credential.{
   Script, ScriptCredential, VerificationKey, VerificationKeyCredential,
@@ -124,14 +126,18 @@ validator(
     }
   }
 
-  //TODO: need to ensure we aren't inadvertently spending any other subscription UTXOs, only the target
   fn redeem(_d: Data, rdmr: WithdrawalAction, ctx: ScriptContext) -> Bool {
     let ScriptContext { transaction, purpose } = ctx
-    let Transaction { inputs, outputs, reference_inputs, mint, .. } =
-      transaction
+    let Transaction { inputs, outputs, reference_inputs, .. } = transaction
 
-    if rdmr == Withdraw && list.has(transaction.extra_signatories, owner_vk) {
+    if
+    (rdmr == Withdraw)? && list.has(transaction.extra_signatories, owner_vk)? && list.all(
+      inputs,
+      fn(input) { input.output.datum == NoDatum },
+    )?{
+    
       // owner can always pull money out for any reason just like a debit card, it's their account
+      // however we need to make sure they don't accidentally delete any subscription datum by spending it
       True
     } else if rdmr == CollectPayment {
       // work our way to our own policy id, which should be the same as our own validator hash
@@ -142,45 +148,35 @@ validator(
       let credential = in_address.payment_credential
       expect ScriptCredential(own_policy_id) = credential
 
-      // expect that we are only spending inputs from our own deposit contracts in the entire transaction, simplifies later checks
-      expect
-        list.all(
-          inputs,
-          fn(input) {
-            input.output.address.payment_credential == ScriptCredential(
-              own_policy_id,
-            )
-          },
-        )
-
-      // using our policy ID to lookup, bind the spending token asset name and amount to variables
-      // they should be present in mint as things that are being burnt
-      expect [(subscription_details_asset_name, _amount)] =
-        mint
-          |> value.from_minted_value
-          |> value.tokens(own_policy_id)
-          |> dict.to_list()
-
-      // find the subscription anchor in the inputs, should be 1 of 2 possibles to spend, the other being just deposits with ada in them.
+      // in the inputs there should be total only 1 datum attached to a UTXO with our script policy ID - the one we're 
+      // going to be collecting from. shouldn't have to worry about datums with other policy IDs - this script can't witness those unlocks
       expect [anchor_input] =
         list.filter(
           inputs,
           fn(input) {
-            value.quantity_of(
-              input.output.value,
-              own_policy_id,
-              subscription_details_asset_name,
-            ) == 1
+            when input.output.datum is {
+              InlineDatum(datum_value) ->
+                if is_subscription_datum(datum_value) {
+                  option.or_else(input.output.reference_script, #"") == own_policy_id
+                } else {
+                  // We'll let you spend random other datums that aren't in our format
+                  False
+                }
+              // We'll let you spend inputs with NoDatum or a datum hash, 
+              // even if that hash actually would correspond to our datum type, 
+              // because we only create InlineDatums so you have been doing non-standard things
+              _other -> False
+            }
           },
         )
+
+      // get token name now we have the input it's at, so we can use to simplify below
+      expect [(subscription_details_asset_name, _amount)] =
+        dict.to_list(value.tokens(anchor_input.output.value, own_policy_id))
 
       // expect it to have a datum
       expect InlineDatum(anchor_datum_value) = anchor_input.output.datum
       expect details: SubscriptionDetails = anchor_datum_value
-
-      // expect that this transaction was initiated by the merchant ID'd in the datum
-      expect
-        list.has(transaction.extra_signatories, details.merchant_vk) == True
 
       // expect anchor to be in the outputs and require it to also be going back to the user's deposits
       expect [own_output] =
@@ -197,11 +193,11 @@ validator(
           },
         )
 
-      // expect it to have an updated datum having a billing date equal to last billing date + 1 month
+      // expect it to have an updated datum having a billing date equal to last billing date + 5 minutes (for now, for testing)
       expect InlineDatum(output_datum_value) = own_output.datum
       expect output_details: SubscriptionDetails = output_datum_value
       expect
-        (details.billable_amount == output_details.billable_amount)? && (details.merchant_vk == output_details.merchant_vk)? && (details.lock_until + 2592000000 == output_details.lock_until)?
+        (details.billable_amount == output_details.billable_amount)? && (details.merchant_vk == output_details.merchant_vk)? && (details.lock_until + 300000 == output_details.lock_until)?
 
       // expect total value going to merchant to be == billable amount 
       expect
@@ -267,5 +263,26 @@ validator(
       // We didn't pass Withdraw or CollectPayment in the redeemer, or didn't have deposit owner signature for a Withdraw
       False
     }
+  }
+}
+
+fn is_subscription_datum(any: Data) -> Bool {
+  let is_constr =
+    builtin.choose_data(_, True, False, False, False, False)
+
+  let is_int =
+    builtin.choose_data(_, False, False, False, True, False)
+
+  let is_bytes =
+    builtin.choose_data(_, False, False, False, False, True)
+
+  if is_constr(any) {
+    let (constructor, fields) = builtin.un_constr_data(any)
+    and {
+      constructor == 0,
+      list.all(fields, fn(field) { is_int(field) || is_bytes(field) }),
+    }
+  } else {
+    False
   }
 }
