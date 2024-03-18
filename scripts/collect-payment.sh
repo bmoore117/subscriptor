@@ -15,27 +15,19 @@ json_data=$(cat collect-payment-redeemer.json)
 # generate the new datum, and return the value to collect, all in one
 billable_amount=$(node generate-updated-subscription-datum.js)
 
-output=$(cardano-cli transaction calculate-min-required-utxo \
- --protocol-params-file intermediate/params.json \
- --tx-out-inline-datum-file intermediate/subscription-metadata-updated.json \
- --tx-out $(cat merchant.addr)+$billable_amount \
- --tx-out "1 $(cat subscriptor.handle_subscription.pol).$tokenname")
-
-datacost=$(cut -d' ' -f2 <<< "$output")
-
 output=$(./query-user-deposit-contract.sh)
 datum_txhash=$(echo "$output" | grep -w $tokenname | cut -d ' ' -f1)
-datum_txix=$(echo "$output" | grep -w $tokenname | cut -d ' ' -f2)
-script_txhash=$(echo "$output" | grep -w $tokenname | cut -d ' ' -f1)
-script_txix=$(echo "$output" | grep -w $tokenname | cut -d ' ' -f2)
+datum_txix=$(echo "$output" | grep -w $tokenname | cut -d ' ' -f6)
+script_txhash=$(echo "$output" | grep -w ScriptDataInBabbageEra | cut -d ' ' -f1)
+script_txix=$(echo "$output" | grep -w ScriptDataInBabbageEra | cut -d ' ' -f6)
 
 output=$(./query-platform-balance.sh)
-platform_txhash=$(echo "$output" | grep -w ScriptDataInBabbageEra | cut -d ' ' -f1)
-platform_txix=$(echo "$output" | grep -w ScriptDataInBabbageEra | cut -d ' ' -f2)
+platform_txhash=$(echo "$output" | grep -w TxOutDatumInline | cut -d ' ' -f1)
+platform_txix=$(echo "$output" | grep -w TxOutDatumInline | cut -d ' ' -f6)
 
 output=$(./query-merchant-balance.sh)
 merchant_txhash=$(echo "$output" | grep -w TxOutDatumNone | cut -d ' ' -f1)
-merchant_txix=$(echo "$output" | grep -w TxOutDatumNone | cut -d ' ' -f2)
+merchant_txix=$(echo "$output" | grep -w TxOutDatumNone | cut -d ' ' -f6)
 
 cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-in $datum_txhash#$datum_txix \
@@ -43,11 +35,13 @@ cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
  --spending-tx-in-reference $script_txhash#$script_txix \
  --spending-plutus-script-v2 \
  --spending-reference-tx-in-redeemer-file collect-payment-redeemer.json \
- --tx-out $(cat merchant.addr)+$billable_amount \
- --tx-out "1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
+ --spending-reference-tx-in-inline-datum-present \
+ --read-only-tx-in-reference $platform_txhash#$platform_txix \
+ --tx-out $(cat intermediate/merchant.addr)+$billable_amount \
+ --tx-out $(cat subscriptor.handle_subscription.addr)+0+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
  --tx-out-inline-datum-file intermediate/subscription-metadata-updated.json \
  --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/merchant.vkey) \
- --change-address $(cat intermediate/subscriptor.handle_subscription.addr) \
+ --change-address $(cat subscriptor.handle_subscription.addr) \
  --out-file intermediate/collect-raw.tx
 
 cardano-cli transaction sign \
