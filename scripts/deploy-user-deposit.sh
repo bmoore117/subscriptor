@@ -9,7 +9,7 @@ output=$(cardano-cli transaction calculate-min-required-utxo \
 datacost=$(cut -d' ' -f2 <<< "$output")
 datacost=$((datacost + 10000))
 
-output=$(cardano-cli query utxo --address $(cat intermediate/user.addr) --testnet-magic $CARDANO_NODE_MAGIC)
+output=$(./query-user-balance.sh)
 txhash=$(echo $output | cut -d ' ' -f5)
 txix=$(echo $output | cut -d ' ' -f6)
 
