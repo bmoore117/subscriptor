@@ -35,7 +35,7 @@ cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
  --spending-tx-in-reference $script_txhash#$script_txix \
  --spending-plutus-script-v2 \
  --spending-reference-tx-in-redeemer-file collect-payment-redeemer.json \
- --spending-reference-tx-in-inline-datum-present \
+ --spending-reference-tx-in-datum-file unit.json \
  --read-only-tx-in-reference $platform_txhash#$platform_txix \
  --tx-out $(cat intermediate/merchant.addr)+$billable_amount \
  --tx-out $(cat subscriptor.handle_subscription.addr)+0+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
