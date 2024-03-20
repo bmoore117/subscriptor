@@ -56,7 +56,7 @@ cardano-cli transaction sign \
 
 # for some reason, cardano-cli query slot-number above will give future slots, even for the current time. 
 # Just sleep a bit to get in range
- sleep 20
+ sleep 25
 
 cardano-cli transaction submit \
  --testnet-magic $CARDANO_NODE_MAGIC \
