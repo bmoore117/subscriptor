@@ -29,7 +29,7 @@ upper_seconds=$(date +%s -d "+3 minute")
 upper_date=$(date --date="@$upper_seconds" +"%Y-%m-%dT%H:%M:%SZ")
 upper_slot=$(cardano-cli query slot-number $upper_date --testnet-magic $CARDANO_NODE_MAGIC)
 
-node create-subscription-datum.js $upper_seconds
+node create-subscription-datum.js $upper_seconds $(cardano-cli address key-hash --payment-verification-key-file intermediate/merchant.vkey)
 
 #tx-in and mint-tx-in should be the same? use the user's money in the contract?
 cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
@@ -56,7 +56,7 @@ cardano-cli transaction sign \
 
 # for some reason, cardano-cli query slot-number above will give future slots, even for the current time. 
 # Just sleep a bit to get in range
- sleep 25
+ sleep 35
 
 cardano-cli transaction submit \
  --testnet-magic $CARDANO_NODE_MAGIC \
