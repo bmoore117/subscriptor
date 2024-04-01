@@ -1,3 +1,4 @@
+use aiken/string
 use aiken/builtin
 use aiken/bytearray
 use aiken/dict
@@ -200,26 +201,31 @@ validator(
         (details.billable_amount == output_details.billable_amount)? && (details.merchant_vk == output_details.merchant_vk)? && (details.lock_until + 300000 == output_details.lock_until)?
       trace "verified new subscription output datum"
       // expect total value going to merchant to be == billable amount 
-      expect
-        list.foldl(
+      let merchant_amount = list.foldl(
           outputs,
           0,
           fn(output, total) {
-            if
-            output.address.payment_credential == VerificationKeyCredential(
-              details.merchant_vk,
-            ){
-            
-              expect [(_ada_asset_name, ada_amount)] =
-                output.value
-                  |> value.tokens(value.ada_policy_id)
-                  |> dict.to_list()
-              ada_amount + total
-            } else {
-              total + 0
+            when output.address.payment_credential is {
+              VerificationKeyCredential(merchant_addr) -> {
+                trace string.concat(@"addr: ", bytearray.to_hex(merchant_addr))
+                if (merchant_addr == details.merchant_vk) {
+                  trace "found merchant output"
+                  expect [(_ada_asset_name, ada_amount)] =
+                    output.value
+                    |> value.tokens(value.ada_policy_id)
+                    |> dict.to_list()
+                  trace string.concat(@"amount: ", string.from_int(ada_amount))
+                  ada_amount + total
+                } else {
+                  total + 0
+                }
+              }
+              _other -> total + 0
             }
           },
-        ) == details.billable_amount
+        )
+      trace string.concat(@"Total merchant amount: ", string.from_int(merchant_amount))
+      expect merchant_amount == details.billable_amount
       trace "verified merchant receipt"
       // expect the platform fee schedule to be in the reference inputs
       expect [platform_input] =
