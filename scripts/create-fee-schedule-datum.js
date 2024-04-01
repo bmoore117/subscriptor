@@ -18,10 +18,8 @@ import('lucid-cardano').then((Lucid) => {
     });
 
     try {
-        let data = fs.readFileSync('./intermediate/platform.vkey');
-        let dataJson = JSON.parse(data);
         let scheduleHex = Lucid.Data.to(
-            { fee_percentage_basis_points: 25n, platform_vk: dataJson.cborHex  },
+            { fee_percentage_basis_points: 25n, platform_vk: process.argv[2]  },
             PlatformFeeSchedule,
         );
 
