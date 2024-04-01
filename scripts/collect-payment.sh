@@ -17,17 +17,17 @@ billable_amount=$(node generate-updated-subscription-datum.js)
 
 output=$(./query-user-deposit-contract.sh)
 datum_txhash=$(echo "$output" | grep -w $tokenname | cut -d ' ' -f1)
-datum_txix=$(echo "$output" | grep -w $tokenname | cut -d ' ' -f6)
+datum_txix=$(echo "$output" | grep -w $tokenname | tr -s ' ' | cut -d ' ' -f2)
 script_txhash=$(echo "$output" | grep -w ScriptDataInBabbageEra | cut -d ' ' -f1)
-script_txix=$(echo "$output" | grep -w ScriptDataInBabbageEra | cut -d ' ' -f6)
+script_txix=$(echo "$output" | grep -w ScriptDataInBabbageEra | tr -s ' ' | cut -d ' ' -f2)
 
 output=$(./query-platform-balance.sh)
 platform_txhash=$(echo "$output" | grep -w TxOutDatumInline | cut -d ' ' -f1)
-platform_txix=$(echo "$output" | grep -w TxOutDatumInline | cut -d ' ' -f6)
+platform_txix=$(echo "$output" | grep -w TxOutDatumInline | tr -s ' ' | cut -d ' ' -f2)
 
 output=$(./query-merchant-balance.sh)
 merchant_txhash=$(echo "$output" | grep -w TxOutDatumNone | cut -d ' ' -f1)
-merchant_txix=$(echo "$output" | grep -w TxOutDatumNone | cut -d ' ' -f6)
+merchant_txix=$(echo "$output" | grep -w TxOutDatumNone | tr -s ' ' | cut -d ' ' -f2)
 
 cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-in $datum_txhash#$datum_txix \
