@@ -3,33 +3,6 @@ if (require.main != module) {
     return;
 }
 
-const jsonify = (param) => {
-    return JSON.stringify(
-        param,
-        (key, value) => (typeof value === "bigint" ? value.toString() : value) // return everything else unchanged
-    );
-};
-
-function expandData(obj) {
-    let result = {};
-    Object.entries(obj).forEach(([key, value]) => {
-        if (key === "index") {
-            result["constructor"] = value;
-        } else {
-            let arr = [];
-            value.forEach((item) => {
-                if (Number.isInteger(item) || typeof item === "bigint") {
-                    arr.push({int: item});
-                } else if (typeof item === "string") {
-                    arr.push({bytes: item});
-                }
-            });
-            result[key] = arr;
-        }
-    });
-    return result;
-}
-
 const fs = require('node:fs');
 import('lucid-cardano').then((Lucid) => {
     const PlatformFeeSchedule = Lucid.Data.Object({
