@@ -3,8 +3,10 @@
 output=$(./query-platform-balance.sh)
 txhash=$(echo "$output" | grep -w TxOutDatumInline | cut -d ' ' -f1)
 txix=$(echo "$output" | grep -w TxOutDatumInline | tr -s ' ' | cut -d ' ' -f2)
-extratxhash=$(echo "$output" | grep -w TxOutDatumNone | cut -d ' ' -f1)
-extratxix=$(echo "$output" | grep -w TxOutDatumNone | tr -s ' ' | cut -d ' ' -f2)
+
+# find largest utxo, sure to cover needs
+extratxhash=$(echo "$output" | grep -w TxOutDatumNone | sort -r | head -n 1 | cut -d ' ' -f1)
+extratxix=$(echo "$output" | grep -w TxOutDatumNone | sort -r | head -n 1 | tr -s ' ' | cut -d ' ' -f2)
 
 address=$(cat intermediate/platform.addr)
 policyid=$(cat intermediate/platform-policy.id)
