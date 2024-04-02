@@ -10,6 +10,26 @@ const jsonify = (param) => {
     );
 };
 
+function expandData(obj) {
+    let result = {};
+    Object.entries(obj).forEach(([key, value]) => {
+        if (key === "index") {
+            result["constructor"] = value;
+        } else {
+            let arr = [];
+            value.forEach((item) => {
+                if (Number.isInteger(item) || typeof item === "bigint") {
+                    arr.push({int: item});
+                } else if (typeof item === "string") {
+                    arr.push({bytes: item});
+                }
+            });
+            result[key] = arr;
+        }
+    });
+    return result;
+}
+
 const fs = require('node:fs');
 import('lucid-cardano').then((Lucid) => {
     const PlatformFeeSchedule = Lucid.Data.Object({
@@ -22,9 +42,8 @@ import('lucid-cardano').then((Lucid) => {
             { fee_percentage_basis_points: 25n, platform_vk: process.argv[2]  },
             PlatformFeeSchedule,
         );
-
-        let scheduleObj = Lucid.Data.from(scheduleHex);
-        fs.writeFileSync("intermediate/platform-metadata.json", jsonify(scheduleObj));
+        let scheduleCbor = Buffer.from(scheduleHex, 'hex');
+        fs.writeFileSync("intermediate/platform-metadata.cbor", scheduleCbor);
     } catch (err) {
         console.error(err);
     }

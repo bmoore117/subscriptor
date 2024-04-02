@@ -1,29 +1,30 @@
 #!/bin/bash
 
+key_hash=$(cardano-cli address key-hash --payment-verification-key-file intermediate/platform.vkey)
+
 cat <<EOF > intermediate/platform-policy.script
 {
     "type": "sig",
-    "keyHash": "$(cardano-cli address key-hash --payment-verification-key-file intermediate/platform.vkey)"
+    "keyHash": "$key_hash"
 }
 EOF
 
 cardano-cli transaction policyid --script-file intermediate/platform-policy.script > intermediate/platform-policy.id
-output=$(cardano-cli query utxo --address $(cat intermediate/platform.addr) --testnet-magic $CARDANO_NODE_MAGIC)
+output=$(./query-platform-balance.sh | grep TxOutDatumNone | rev | sort -r | rev | head -n 1) # find largest utxo, sure to cover needs
 
 address=$(cat intermediate/platform.addr)
-txhash=$(echo $output | cut -d ' ' -f5)
-txix=$(echo $output | cut -d ' ' -f6)
-funds=$(echo $output | cut -d ' ' -f7)
+txhash=$(echo "$output" | cut -d ' ' -f1)
+txix=$(echo "$output" | tr -s ' ' | cut -d ' ' -f2)
 policyid=$(cat intermediate/platform-policy.id)
 #"PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
 tokenname="000643b0506c6174666f726d4665655363686564756c65"
 mint="1 $policyid.$tokenname"
 
-json_data=$(cat intermediate/platform-metadata.json)
+node create-fee-schedule-datum.js $key_hash
 
 output=$(cardano-cli transaction calculate-min-required-utxo \
  --protocol-params-file intermediate/params.json \
- --tx-out-inline-datum-value $json_data \
+ --tx-out-inline-datum-cbor-file intermediate/platform-metadata.cbor \
  --tx-out "$address+0+$mint")
 
 datacost=$(cut -d' ' -f2 <<< "$output")
@@ -35,7 +36,7 @@ cardano-cli transaction build \
  --change-address $address \
  --mint="1 $policyid.$tokenname" \
  --minting-script-file intermediate/platform-policy.script \
- --tx-out-inline-datum-value $json_data  \
+ --tx-out-inline-datum-cbor-file intermediate/platform-metadata.cbor  \
  --out-file intermediate/platform-schedule-raw.tx
 
 cardano-cli transaction sign \
