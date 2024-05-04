@@ -1,14 +1,14 @@
-name = 'aiken-lang/gift_card'
+name = 'aiken-lang/subscriptor'
 version = '0.0.0'
 license = 'Apache-2.0'
-description = "Create a gift card that can be used to redeem locked assets"
+description = "Smart contract wallet supporting pull-based subscriptions"
 
 [repository]
 user = 'aiken-lang'
-project = 'gift_card'
+project = 'subscriptor'
 platform = 'github'
 
 [[dependencies]]
 name = 'aiken-lang/stdlib'
-version = 'main'
+version = '1.8.0'
 source = 'github'
