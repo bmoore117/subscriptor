@@ -4,7 +4,7 @@
 
 2. Once aiken check is working, write validators as desired
 
-3. aiken build
+3. aiken build [-t verbose] # to keep traces
 
 4. create addresses as per /scripts
 
