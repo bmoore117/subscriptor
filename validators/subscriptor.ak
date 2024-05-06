@@ -41,6 +41,7 @@ type SubscriptionDetails {
 type PlatformFeeSchedule {
   fee_percentage_basis_points: Int,
   platform_vk: VerificationKeyHash,
+  min_utxo_cost_lovelace: Int
 }
 
 // Only the person who deployed the contract can mint or burn CIP 68 reference tokens, which detail a subscription. 
@@ -127,6 +128,7 @@ validator(
   }
 
   fn redeem(_d: Data, rdmr: WithdrawalAction, ctx: ScriptContext) -> Bool {
+    trace "Build 2"
     let ScriptContext { transaction, purpose } = ctx
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace "Got context"
@@ -197,9 +199,29 @@ validator(
       // expect it to have an updated datum having a billing date equal to last billing date + 5 minutes (for now, for testing)
       expect InlineDatum(output_datum_value) = own_output.datum
       expect output_details: SubscriptionDetails = output_datum_value
+      trace string.from_int(output_details.lock_until)
+      trace string.from_int(details.lock_until)
       expect
         (details.billable_amount == output_details.billable_amount)? && (details.merchant_vk == output_details.merchant_vk)? && (details.lock_until + 300000 == output_details.lock_until)?
       trace "verified new subscription output datum"
+      
+      // expect the platform fee schedule to be in the reference inputs
+      expect [platform_input] =
+        list.filter(
+          reference_inputs,
+          fn(input) {
+            value.quantity_of(
+              input.output.value,
+              platform_policy_id,
+              // "PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
+              #"000643b0506c6174666f726d4665655363686564756c65",
+            ) == 1
+          },
+        )
+      expect InlineDatum(platform_datum_value) = platform_input.output.datum
+      expect platform_details: PlatformFeeSchedule = platform_datum_value
+      trace "found platform datum"
+      
       // expect total value going to merchant to be == billable amount 
       let merchant_amount = list.foldl(
           outputs,
@@ -225,46 +247,35 @@ validator(
           },
         )
       trace string.concat(@"Total merchant amount: ", string.from_int(merchant_amount))
-      expect merchant_amount == details.billable_amount
+      expect merchant_amount == details.billable_amount + platform_details.min_utxo_cost_lovelace
       trace "verified merchant receipt"
-      // expect the platform fee schedule to be in the reference inputs
-      expect [platform_input] =
-        list.filter(
-          reference_inputs,
-          fn(input) {
-            value.quantity_of(
-              input.output.value,
-              platform_policy_id,
-              // "PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
-              #"000643b0506c6174666f726d4665655363686564756c65",
-            ) == 1
-          },
-        )
-      expect InlineDatum(platform_datum_value) = platform_input.output.datum
-      expect platform_details: PlatformFeeSchedule = platform_datum_value
-      trace "found platform datum"
 
       // platform collects a percentage of the total going to the merchant
-      expect
-        list.foldl(
+      let platform_amount = list.foldl(
           outputs,
           0,
           fn(output, total) {
-            if
-            output.address.payment_credential == VerificationKeyCredential(
-              platform_details.platform_vk,
-            ){
-            
-              expect [(_ada_asset_name, ada_amount)] =
-                output.value
-                  |> value.tokens(value.ada_policy_id)
-                  |> dict.to_list()
-              ada_amount + total
-            } else {
-              total + 0
+            when output.address.payment_credential is {
+              VerificationKeyCredential(platform_addr) -> {
+                trace string.concat(@"addr: ", bytearray.to_hex(platform_addr))
+                if (platform_addr == platform_details.platform_vk) {
+                  trace "found platform output"
+                  expect [(_ada_asset_name, ada_amount)] =
+                    output.value
+                    |> value.tokens(value.ada_policy_id)
+                    |> dict.to_list()
+                  trace string.concat(@"amount: ", string.from_int(ada_amount))
+                  ada_amount + total
+                } else {
+                  total + 0
+                }
+              }
+              _other -> total + 0
             }
           },
-        ) == platform_details.fee_percentage_basis_points * details.billable_amount / 1000
+        )
+      trace string.concat(@"Total platform amount: ", string.from_int(platform_amount))
+      expect platform_amount == (platform_details.fee_percentage_basis_points * details.billable_amount / 1000) + platform_details.min_utxo_cost_lovelace
       trace "verified platform receipt"
       // if every condition met thus far, return true
       True
