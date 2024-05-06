@@ -7,7 +7,6 @@ output=$(cardano-cli transaction calculate-min-required-utxo \
  --tx-out "$(cat subscriptor.handle_subscription.addr) + 10000 lovelace") 
 
 datacost=$(cut -d' ' -f2 <<< "$output")
-datacost=$((datacost + 10000))
 
 output=$(./query-user-balance.sh)
 txhash=$(echo $output | cut -d ' ' -f5)
