@@ -4,7 +4,7 @@ output=$(cardano-cli transaction calculate-min-required-utxo \
  --protocol-params-file intermediate/params.json \
  --tx-out-reference-script-file subscriptor.handle_subscription.plutus \
  --tx-out-datum-hash-file unit.json \
- --tx-out "$(cat subscriptor.handle_subscription.addr) + 10000 lovelace") 
+ --tx-out "$(cat subscriptor.handle_subscription.addr) + 0") 
 
 datacost=$(cut -d' ' -f2 <<< "$output")
 
