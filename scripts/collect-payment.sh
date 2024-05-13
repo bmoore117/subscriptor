@@ -16,16 +16,18 @@ billable_amount=$(node generate-updated-subscription-datum.js)
 output=$(./query-user-deposit-contract.sh)
 datum_txhash=$(echo "$output" | grep -w $tokenname | cut -d ' ' -f1)
 datum_txix=$(echo "$output" | grep -w $tokenname | tr -s ' ' | cut -d ' ' -f2)
-script_txhash=$(echo "$output" | grep -w ScriptDataInBabbageEra | cut -d ' ' -f1)
-script_txix=$(echo "$output" | grep -w ScriptDataInBabbageEra | tr -s ' ' | cut -d ' ' -f2)
+datum_lovelace=$(echo "$output" | grep -w $tokenname | tr -s ' ' | cut -d ' ' -f3)
+script_txhash=$(echo "$output" | grep -w ScriptDataInBabbageEra | head -n 1 | cut -d ' ' -f1)
+script_txix=$(echo "$output" | grep -w ScriptDataInBabbageEra | head -n 1 | tr -s ' ' | cut -d ' ' -f2)
 
 output=$(./query-platform-balance.sh)
 platform_txhash=$(echo "$output" | grep -w TxOutDatumInline | cut -d ' ' -f1)
 platform_txix=$(echo "$output" | grep -w TxOutDatumInline | tr -s ' ' | cut -d ' ' -f2)
 
+# need single tx details, so find largest tx
 output=$(./query-merchant-balance.sh)
-merchant_txhash=$(echo "$output" | grep -w TxOutDatumNone | cut -d ' ' -f1)
-merchant_txix=$(echo "$output" | grep -w TxOutDatumNone | tr -s ' ' | cut -d ' ' -f2)
+merchant_txhash=$(echo "$output" | grep -w TxOutDatumNone | rev | sort -r | rev | head -n 1 | cut -d ' ' -f1)
+merchant_txix=$(echo "$output" | grep -w TxOutDatumNone | rev | sort -r | rev |head -n 1 | tr -s ' ' | cut -d ' ' -f2)
 
 platform_fee=$(node calculate-platform-tx-fee.js)
 
@@ -46,21 +48,49 @@ min_cost_per_output=$(cut -d' ' -f2 <<< "$output")
 billable_amount=$((billable_amount+min_cost_per_output))
 platform_fee=$((platform_fee+min_cost_per_output))
 
-cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
- --tx-in $datum_txhash#$datum_txix \
- --tx-in-collateral $merchant_txhash#$merchant_txix \
- --spending-tx-in-reference $script_txhash#$script_txix \
- --spending-plutus-script-v2 \
- --spending-reference-tx-in-redeemer-file collect-payment-redeemer.json \
- --spending-reference-tx-in-datum-file unit.json \
- --read-only-tx-in-reference $platform_txhash#$platform_txix \
- --tx-out $(cat intermediate/merchant.addr)+$billable_amount \
- --tx-out $(cat intermediate/platform.addr)+$platform_fee \
- --tx-out $(cat subscriptor.handle_subscription.addr)+$anchor_output_cost+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
- --tx-out-inline-datum-file intermediate/subscription-metadata-updated.json \
- --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/merchant.vkey) \
- --change-address $(cat subscriptor.handle_subscription.addr) \
- --out-file intermediate/collect-raw.tx
+total=$((billable_amount+platform_fee+anchor_output_cost))
+
+if (( total > datum_lovelace )); then
+    echo "Using multi-utxo redemption"
+    echo -n "Please enter additional tx hash: "
+    read extra_tx
+    echo -n "Please enter additional tx ix: "
+    read extra_tx_ix
+
+    cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
+     --tx-in $datum_txhash#$datum_txix \
+     --tx-in $extra_tx#$extra_tx_ix \
+     --tx-in-collateral $merchant_txhash#$merchant_txix \
+     --spending-tx-in-reference $script_txhash#$script_txix \
+     --spending-plutus-script-v2 \
+     --spending-reference-tx-in-redeemer-file collect-payment-redeemer.json \
+     --tx-in-redeemer-file collect-payment-redeemer.json \
+     --spending-reference-tx-in-datum-file unit.json \
+     --read-only-tx-in-reference $platform_txhash#$platform_txix \
+     --tx-out $(cat intermediate/merchant.addr)+$billable_amount \
+     --tx-out $(cat intermediate/platform.addr)+$platform_fee \
+     --tx-out $(cat subscriptor.handle_subscription.addr)+$anchor_output_cost+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
+     --tx-out-inline-datum-file intermediate/subscription-metadata-updated.json \
+     --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/merchant.vkey) \
+     --change-address $(cat subscriptor.handle_subscription.addr) \
+     --out-file intermediate/collect-raw.tx
+else
+    cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
+     --tx-in $datum_txhash#$datum_txix \
+     --tx-in-collateral $merchant_txhash#$merchant_txix \
+     --spending-tx-in-reference $script_txhash#$script_txix \
+     --spending-plutus-script-v2 \
+     --spending-reference-tx-in-redeemer-file collect-payment-redeemer.json \
+     --spending-reference-tx-in-datum-file unit.json \
+     --read-only-tx-in-reference $platform_txhash#$platform_txix \
+     --tx-out $(cat intermediate/merchant.addr)+$billable_amount \
+     --tx-out $(cat intermediate/platform.addr)+$platform_fee \
+     --tx-out $(cat subscriptor.handle_subscription.addr)+$anchor_output_cost+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
+     --tx-out-inline-datum-file intermediate/subscription-metadata-updated.json \
+     --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/merchant.vkey) \
+     --change-address $(cat subscriptor.handle_subscription.addr) \
+     --out-file intermediate/collect-raw.tx
+fi
 
 cardano-cli transaction sign \
  --tx-body-file intermediate/collect-raw.tx \
@@ -71,3 +101,7 @@ cardano-cli transaction sign \
 cardano-cli transaction submit \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-file intermediate/collect-signed.tx
+
+if [ $? -eq 0 ]; then
+  cp intermediate/subscription-metadata-updated.json intermediate/subscription-metadata.json
+fi
