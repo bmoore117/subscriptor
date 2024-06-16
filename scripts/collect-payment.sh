@@ -3,8 +3,13 @@
 # need: redeemer, multiple inputs including the right datum, and a reference input of the platform
 # also need: to generate proper output datum
 
-echo -n "Please enter a subscription name: "
-read tokenname
+if [ -z "$1" ]
+  then
+    echo -n "Please enter a subscription name: "
+    read tokenname
+  else
+    tokenname=$1
+fi
 
 tokenname=$(echo -n "$tokenname" | xxd -ps | tr -d '\n')
 tokenname="000643b0$tokenname"
@@ -73,7 +78,17 @@ if (( total > datum_lovelace )); then
      --tx-out-inline-datum-file intermediate/subscription-metadata-updated.json \
      --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/merchant.vkey) \
      --change-address $(cat subscriptor.handle_subscription.addr) \
-     --out-file intermediate/collect-raw.tx
+     --out-file intermediate/collect-raw-multi-utxo.tx
+
+    cardano-cli transaction sign \
+     --tx-body-file intermediate/collect-raw-multi-utxo.tx \
+     --signing-key-file intermediate/merchant.skey \
+     --testnet-magic $CARDANO_NODE_MAGIC \
+     --out-file intermediate/collect-signed-multi-utxo.tx
+     
+    cardano-cli transaction submit \
+    --testnet-magic $CARDANO_NODE_MAGIC \
+    --tx-file intermediate/collect-signed-multi-utxo.tx
 else
     cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
      --tx-in $datum_txhash#$datum_txix \
@@ -90,17 +105,17 @@ else
      --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/merchant.vkey) \
      --change-address $(cat subscriptor.handle_subscription.addr) \
      --out-file intermediate/collect-raw.tx
+    
+    cardano-cli transaction sign \
+     --tx-body-file intermediate/collect-raw.tx \
+     --signing-key-file intermediate/merchant.skey \
+     --testnet-magic $CARDANO_NODE_MAGIC \
+     --out-file intermediate/collect-signed.tx
+     
+    cardano-cli transaction submit \
+    --testnet-magic $CARDANO_NODE_MAGIC \
+    --tx-file intermediate/collect-signed.tx
 fi
-
-cardano-cli transaction sign \
- --tx-body-file intermediate/collect-raw.tx \
- --signing-key-file intermediate/merchant.skey \
- --testnet-magic $CARDANO_NODE_MAGIC \
- --out-file intermediate/collect-signed.tx
-
-cardano-cli transaction submit \
- --testnet-magic $CARDANO_NODE_MAGIC \
- --tx-file intermediate/collect-signed.tx
 
 if [ $? -eq 0 ]; then
   cp intermediate/subscription-metadata-updated.json intermediate/subscription-metadata.json
