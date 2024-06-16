@@ -1,13 +1,23 @@
 #!/bin/bash
 
-echo -n "Please enter a subscription name: "
-read tokenname
+if [ -z "$1" ]
+  then
+    echo -n "Please enter a subscription name: "
+    read tokenname
+  else
+    tokenname=$1
+fi
 
 tokenname=$(echo -n "$tokenname" | xxd -ps | tr -d '\n')
 tokenname="000643b0$tokenname"
 echo "Token name encoded: $tokenname"
 
+# for some reason, cardano-cli query slot-number above will give future slots, even for the current time. 
+# so back up one minute
+lower_seconds=$(date +%s -d "-1 minute")
+lower_date=$(date --date="@$lower_seconds" +"%Y-%m-%dT%H:%M:%SZ")
 lower_slot=$(cardano-cli query slot-number $(date -u +"%Y-%m-%dT%H:%M:%SZ") --testnet-magic $CARDANO_NODE_MAGIC)
+
 upper_seconds=$(date +%s -d "+3 minute")
 upper_date=$(date --date="@$upper_seconds" +"%Y-%m-%dT%H:%M:%SZ")
 upper_slot=$(cardano-cli query slot-number $upper_date --testnet-magic $CARDANO_NODE_MAGIC)
@@ -63,11 +73,6 @@ cardano-cli transaction sign \
  --signing-key-file intermediate/user.skey \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --out-file intermediate/mint-signed.tx
-
-# for some reason, cardano-cli query slot-number above will give future slots, even for the current time. 
-# Just sleep a bit to get in range
-echo "Sleeping to get in range of the transaction time bounds"
-sleep 40
 
 cardano-cli transaction submit \
  --testnet-magic $CARDANO_NODE_MAGIC \
