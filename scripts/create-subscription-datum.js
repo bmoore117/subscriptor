@@ -39,6 +39,7 @@ import('lucid-cardano').then((Lucid) => {
     });
 
     try {
+        // hardcoding a lock_until of five minutes into the future
         let resultHex = Lucid.Data.to(
             { lock_until: (BigInt(process.argv[2]) + 300n)*1000n, billable_amount: 5000n, merchant_vk: process.argv[3]  },
             SubscriptionDetails,
