@@ -1,5 +1,8 @@
 #!/bin/bash
 
+echo -n "Please enter a platform fee amount in basis points: "
+read feeamount
+
 key_hash=$(cardano-cli address key-hash --payment-verification-key-file intermediate/platform.vkey)
 
 cat <<EOF > intermediate/platform-policy.script
@@ -20,7 +23,15 @@ policyid=$(cat intermediate/platform-policy.id)
 tokenname="000643b0506c6174666f726d4665655363686564756c65"
 mint="1 $policyid.$tokenname"
 
-node create-fee-schedule-datum.js $key_hash
+# this is the true minimum cost for the most minimal output you can have, 
+# a UTXO going to a simple address with no ada in it, and no other data
+# you can send any amount of ada above this, but no less than this per utxo
+output=$(cardano-cli transaction calculate-min-required-utxo \
+ --protocol-params-file intermediate/params.json \
+ --tx-out "$(cat intermediate/platform.addr) + 0 lovelace")
+min_cost_per_output=$(cut -d' ' -f2 <<< "$output")
+
+node create-fee-schedule-datum.js $feeamount $key_hash $min_cost_per_output
 
 output=$(cardano-cli transaction calculate-min-required-utxo \
  --protocol-params-file intermediate/params.json \

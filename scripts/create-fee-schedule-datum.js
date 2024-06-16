@@ -19,7 +19,7 @@ import('lucid-cardano').then((Lucid) => {
     });
 
     try {
-        let jsonObject = { fee_percentage_basis_points: 25n, platform_vk: process.argv[2], min_utxo_cost_lovelace: 857690n };
+        let jsonObject = { fee_percentage_basis_points: BigInt(process.argv[2]), platform_vk: process.argv[3], min_utxo_cost_lovelace: BigInt(process.argv[4]) }; //min utxo should be 857690, calculated elsewhere
         let scheduleHex = Lucid.Data.to(
             jsonObject,
             PlatformFeeSchedule,
