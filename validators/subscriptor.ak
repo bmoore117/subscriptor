@@ -104,7 +104,7 @@ validator(
             _other -> False
           }
 
-        // requirement: anchor needs to go to a UTXO at this script's address, which must also have an inline datum. There should only be 1 output datum across all the outputs
+        // requirement: anchor needs to go to a UTXO at this script's address, in the form of an inline datum. There should only be 1 output datum across all the outputs
         expect [Output { datum: InlineDatum(output_datum), .. }] =
           list.filter(
             outputs,
