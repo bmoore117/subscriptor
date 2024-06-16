@@ -4,4 +4,4 @@ cardano-cli address key-gen --verification-key-file intermediate/platform.vkey -
 
 cardano-cli address build --payment-verification-key-file intermediate/platform.vkey --out-file intermediate/platform.addr --testnet-magic $CARDANO_NODE_MAGIC
 
-echo "Don't forget to fund your newly created wallet, then run deploy-platform-fee-schedule.sh"
+echo "Don't forget to fund your newly created wallet, then run mint-platform-fee-schedule.sh"
