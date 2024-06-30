@@ -14,11 +14,11 @@ echo "Token name encoded: $tokenname"
 
 # for some reason, cardano-cli query slot-number above will give future slots, even for the current time. 
 # so back up one minute
-lower_seconds=$(date +%s -d "-1 minute")
+lower_seconds=$(date +%s -d "-120 seconds")
 lower_date=$(date --date="@$lower_seconds" +"%Y-%m-%dT%H:%M:%SZ")
-lower_slot=$(cardano-cli query slot-number $(date -u +"%Y-%m-%dT%H:%M:%SZ") --testnet-magic $CARDANO_NODE_MAGIC)
+lower_slot=$(cardano-cli query slot-number $lower_date --testnet-magic $CARDANO_NODE_MAGIC)
 
-upper_seconds=$(date +%s -d "+3 minute")
+upper_seconds=$(date +%s -d "+1 minute")
 upper_date=$(date --date="@$upper_seconds" +"%Y-%m-%dT%H:%M:%SZ")
 upper_slot=$(cardano-cli query slot-number $upper_date --testnet-magic $CARDANO_NODE_MAGIC)
 
