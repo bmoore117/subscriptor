@@ -40,7 +40,7 @@ output=$(cardano-cli transaction calculate-min-required-utxo \
 
 datacost=$(cut -d' ' -f2 <<< "$output")
 
-cardano-cli transaction build \
+cardano-cli conway transaction build \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-in $txhash#$txix \
  --tx-out $address+$datacost+"$mint" \

@@ -15,18 +15,18 @@ tokenname="000643b0506c6174666f726d4665655363686564756c65"
 mint="-1 $policyid.$tokenname"
 concat="$txhash#$txix"
 
-output=$(cardano-cli transaction build \
+output=$(cardano-cli conway transaction build \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-in $concat \
  --tx-out $address+0 \
  --mint="-1 $policyid.$tokenname" \
  --minting-script-file intermediate/platform-policy.script \
  --change-address $address \
- --out-file intermediate/burning-fee-schedule-raw.tx 2>&1 >/dev/null)
+ --out-file intermediate/burning-fee-schedule-raw.tx 2>&1 > /dev/null)
 
-cost=$(echo "$output" | rev | cut -d ' ' -f1 | rev | xargs echo -n)
+cost=$(echo "$output" | grep "required" | rev | cut -d ' ' -f2 | rev)
 
-cardano-cli transaction build \
+cardano-cli conway transaction build \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-in $txhash#$txix \
  --tx-in $extratxhash#$extratxix \
