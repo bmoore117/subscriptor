@@ -52,7 +52,7 @@ minter_script_tx_hash=$(echo $output | cut -d ' ' -f5)
 minter_script_tx_ix=$(echo $output | cut -d ' ' -f6)
 
 #tx-in and mint-tx-in should be the same? use the user's money in the contract?
-cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
+cardano-cli conway transaction build --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-in $user_tx_hash#$user_tx_ix \
  --tx-in-collateral $user_tx_hash#$user_tx_ix \
  --mint-tx-in-reference $minter_script_tx_hash#$minter_script_tx_ix \

@@ -28,7 +28,7 @@ output=$(./query-user-balance.sh)
 txhash=$(echo $output | cut -d ' ' -f5)
 txix=$(echo $output | cut -d ' ' -f6)
 
-cardano-cli transaction build \
+cardano-cli conway transaction build \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --change-address $(cat intermediate/user.addr) \
  --tx-in $txhash#$txix \
