@@ -1,4 +1,4 @@
-use aiken/string
+use aiken/primitive/string
 
 type DateTime {
   // -1 if unset, otherwise known time_from_epoch offset
