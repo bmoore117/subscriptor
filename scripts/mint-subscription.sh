@@ -13,7 +13,7 @@ tokenname="000643b0$tokenname"
 echo "Token name encoded: $tokenname"
 
 # for some reason, cardano-cli query slot-number above will give future slots, even for the current time. 
-# so back up one minute
+# so back up two minutes
 lower_seconds=$(date +%s -d "-120 seconds")
 lower_date=$(date --date="@$lower_seconds" +"%Y-%m-%dT%H:%M:%SZ")
 lower_slot=$(cardano-cli query slot-number $lower_date --testnet-magic $CARDANO_NODE_MAGIC)
@@ -68,12 +68,12 @@ cardano-cli conway transaction build --testnet-magic $CARDANO_NODE_MAGIC \
  --change-address $(cat intermediate/user.addr) \
  --out-file intermediate/mint-raw.tx
 
-cardano-cli transaction sign \
+cardano-cli conway transaction sign \
  --tx-body-file intermediate/mint-raw.tx \
  --signing-key-file intermediate/user.skey \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --out-file intermediate/mint-signed.tx
 
-cardano-cli transaction submit \
+cardano-cli conway transaction submit \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-file intermediate/mint-signed.tx

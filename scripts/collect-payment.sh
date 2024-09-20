@@ -22,8 +22,11 @@ output=$(./query-user-deposit-contract.sh)
 datum_txhash=$(echo "$output" | grep -w $tokenname | cut -d ' ' -f1)
 datum_txix=$(echo "$output" | grep -w $tokenname | tr -s ' ' | cut -d ' ' -f2)
 datum_lovelace=$(echo "$output" | grep -w $tokenname | tr -s ' ' | cut -d ' ' -f3)
-script_txhash=$(echo "$output" | grep -w ScriptDataInBabbageEra | head -n 1 | cut -d ' ' -f1)
-script_txix=$(echo "$output" | grep -w ScriptDataInBabbageEra | head -n 1 | tr -s ' ' | cut -d ' ' -f2)
+script_txhash=$(echo "$output" | grep -w AlonzoEraOnwardsConway | head -n 1 | cut -d ' ' -f1)
+script_txix=$(echo "$output" | grep -w AlonzoEraOnwardsConway | head -n 1 | tr -s ' ' | cut -d ' ' -f2)
+
+echo $script_txhash
+echo $script_txix
 
 output=$(./query-platform-balance.sh)
 platform_txhash=$(echo "$output" | grep -w TxOutDatumInline | cut -d ' ' -f1)
@@ -31,8 +34,8 @@ platform_txix=$(echo "$output" | grep -w TxOutDatumInline | tr -s ' ' | cut -d '
 
 # need single tx details, so find largest tx
 output=$(./query-merchant-balance.sh)
-merchant_txhash=$(echo "$output" | grep -w TxOutDatumNone | rev | sort -r | rev | head -n 1 | cut -d ' ' -f1)
-merchant_txix=$(echo "$output" | grep -w TxOutDatumNone | rev | sort -r | rev |head -n 1 | tr -s ' ' | cut -d ' ' -f2)
+merchant_txhash=$(echo "$output" | grep -w TxOutDatumNone | tr -s ' ' | sort -nrk3,3 | head -n 1 | cut -d ' ' -f1)
+merchant_txix=$(echo "$output" | grep -w TxOutDatumNone | tr -s ' ' | sort -nrk3,3 | head -n 1 | cut -d ' ' -f2)
 
 platform_fee=$(node calculate-platform-tx-fee.js)
 
@@ -50,19 +53,36 @@ output=$(cardano-cli transaction calculate-min-required-utxo \
  --tx-out "$(cat intermediate/platform.addr) + 0 lovelace")
 min_cost_per_output=$(cut -d' ' -f2 <<< "$output")
 
-billable_amount=$((billable_amount+min_cost_per_output))
-platform_fee=$((platform_fee+min_cost_per_output))
+if ((billable_amount < min_cost_per_output)); then
+  billable_amount=$min_cost_per_output
+fi
 
-total=$((billable_amount+platform_fee+anchor_output_cost))
+if ((platform_fee < min_cost_per_output)); then
+  platform_fee=$min_cost_per_output
+fi
 
-if (( total > datum_lovelace )); then
+output_total=$((billable_amount + platform_fee + anchor_output_cost))
+input_remainder=$((datum_lovelace - output_total))
+
+echo $output_total
+echo $datum_lovelace
+
+if (( output_total > datum_lovelace )); then
     echo "Using multi-utxo redemption"
     echo -n "Please enter additional tx hash: "
     read extra_tx
     echo -n "Please enter additional tx ix: "
     read extra_tx_ix
 
-    cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
+    # expectation is you give an additional tx with enough ada such that original tx + new tx have enough 
+    # ada to cover the output total otherwise the tx will fail
+    output=$(cardano-cli query utxo --tx-in $extra_tx#$extra_tx_ix --testnet-magic ${CARDANO_NODE_MAGIC})
+    extra_datum_lovelace=$(echo "$output" | grep -w "lovelace" | tr -s ' ' | cut -d ' ' -f3)
+
+    input_total=$((datum_lovelace + extra_datum_lovelace))
+    input_remainder=$((input_total - output_total))
+
+    cardano-cli conway transaction build --testnet-magic $CARDANO_NODE_MAGIC \
      --tx-in $datum_txhash#$datum_txix \
      --tx-in $extra_tx#$extra_tx_ix \
      --tx-in-collateral $merchant_txhash#$merchant_txix \
@@ -74,11 +94,15 @@ if (( total > datum_lovelace )); then
      --read-only-tx-in-reference $platform_txhash#$platform_txix \
      --tx-out $(cat intermediate/merchant.addr)+$billable_amount \
      --tx-out $(cat intermediate/platform.addr)+$platform_fee \
-     --tx-out $(cat subscriptor.handle_subscription.addr)+$anchor_output_cost+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
+     --tx-out $(cat subscriptor.handle_subscription.addr)+$input_remainder+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
      --tx-out-inline-datum-file intermediate/subscription-metadata-updated.json \
      --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/merchant.vkey) \
      --change-address $(cat subscriptor.handle_subscription.addr) \
      --out-file intermediate/collect-raw-multi-utxo.tx
+
+    if [ $? -eq 1 ]; then
+      exit 1
+    fi
 
     cardano-cli transaction sign \
      --tx-body-file intermediate/collect-raw-multi-utxo.tx \
@@ -90,7 +114,7 @@ if (( total > datum_lovelace )); then
     --testnet-magic $CARDANO_NODE_MAGIC \
     --tx-file intermediate/collect-signed-multi-utxo.tx
 else
-    cardano-cli transaction build --testnet-magic $CARDANO_NODE_MAGIC \
+    cardano-cli conway transaction build --testnet-magic $CARDANO_NODE_MAGIC \
      --tx-in $datum_txhash#$datum_txix \
      --tx-in-collateral $merchant_txhash#$merchant_txix \
      --spending-tx-in-reference $script_txhash#$script_txix \
@@ -100,19 +124,23 @@ else
      --read-only-tx-in-reference $platform_txhash#$platform_txix \
      --tx-out $(cat intermediate/merchant.addr)+$billable_amount \
      --tx-out $(cat intermediate/platform.addr)+$platform_fee \
-     --tx-out $(cat subscriptor.handle_subscription.addr)+$anchor_output_cost+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
+     --tx-out $(cat subscriptor.handle_subscription.addr)+$input_remainder+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
      --tx-out-inline-datum-file intermediate/subscription-metadata-updated.json \
      --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/merchant.vkey) \
-     --change-address $(cat subscriptor.handle_subscription.addr) \
+     --change-address $(cat intermediate/merchant.addr) \
      --out-file intermediate/collect-raw.tx
-    
-    cardano-cli transaction sign \
+
+    if [ $? -eq 1 ]; then
+      exit 1
+    fi
+
+    cardano-cli conway transaction sign \
      --tx-body-file intermediate/collect-raw.tx \
      --signing-key-file intermediate/merchant.skey \
      --testnet-magic $CARDANO_NODE_MAGIC \
      --out-file intermediate/collect-signed.tx
      
-    cardano-cli transaction submit \
+    cardano-cli conway transaction submit \
     --testnet-magic $CARDANO_NODE_MAGIC \
     --tx-file intermediate/collect-signed.tx
 fi

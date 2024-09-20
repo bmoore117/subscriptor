@@ -21,12 +21,12 @@ cardano-cli conway transaction build \
  --tx-out-datum-hash-file unit.json \
  --out-file intermediate/user-deploy-raw.tx
 
-cardano-cli transaction sign \
+cardano-cli conway transaction sign \
  --tx-body-file intermediate/user-deploy-raw.tx \
  --signing-key-file intermediate/user.skey \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --out-file intermediate/user-deploy-signed.tx
 
-cardano-cli transaction submit \
+cardano-cli conway transaction submit \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-file intermediate/user-deploy-signed.tx
