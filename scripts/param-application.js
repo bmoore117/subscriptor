@@ -25,9 +25,11 @@ import('lucid-cardano').then((Lucid) => {
 
     Lucid.Lucid.new(null, network).then((lucid) => {
         var compiledCode = "";
+        var hash = "";
         for (const validator of plutusJson.validators) {
             if (validator.title === process.argv[2]) { // first 2 args are node <js file name>, so real args start at 3rd index
                 compiledCode = validator.compiledCode;
+                hash = validator.hash;
                 break;
             } 
         }
@@ -44,9 +46,6 @@ import('lucid-cardano').then((Lucid) => {
             parameterizedValidator = Lucid.applyParamsToScript(compiledCode, args);
         }
 
-        let scriptAddress = lucid.utils.validatorToAddress({type: plutusVersion, script: parameterizedValidator});
-        let policyId = lucid.utils.validatorToScriptHash({type: plutusVersion, script: parameterizedValidator});
-
         let output = {
             type: "PlutusScript" + plutusJson.preamble.plutusVersion.toUpperCase(),
             description: "",
@@ -55,8 +54,7 @@ import('lucid-cardano').then((Lucid) => {
     
         try {
             fs.writeFileSync(process.argv[2] + ".plutus", JSON.stringify(output));
-            fs.writeFileSync(process.argv[2] + ".addr", scriptAddress);
-            fs.writeFileSync(process.argv[2] + ".pol", policyId);
+            fs.writeFileSync(process.argv[2] + ".pol", hash);
         } catch (err) {
             console.error(err);
         }
