@@ -3,6 +3,7 @@ use aiken/collection/list
 use aiken/crypto.{VerificationKeyHash, ScriptHash}
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/primitive/bytearray
+use aiken/primitive/string
 use cardano/address.{VerificationKey, Script}
 use cardano/assets.{PolicyId}
 use cardano/transaction.{InlineDatum, Input, NoDatum, Output, OutputReference, Transaction}
@@ -33,7 +34,7 @@ type PlatformFeeSchedule {
 }
  
 validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptHash) {
-  spend(d: Option<Data>, rdmr: WithdrawalAction, own_reference: OutputReference, transaction: Transaction) -> Bool {
+  spend(_d: Option<Data>, rdmr: WithdrawalAction, own_reference: OutputReference, transaction: Transaction) -> Bool {
     trace @"Build 5"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
