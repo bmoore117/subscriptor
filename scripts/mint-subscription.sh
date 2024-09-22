@@ -16,25 +16,25 @@ echo "Token name encoded: $tokenname"
 # so back up two minutes
 lower_seconds=$(date +%s -d "-120 seconds")
 lower_date=$(date --date="@$lower_seconds" +"%Y-%m-%dT%H:%M:%SZ")
-lower_slot=$(cardano-cli query slot-number $lower_date --testnet-magic $CARDANO_NODE_MAGIC)
+lower_slot=$(cardano-cli conway query slot-number $lower_date --testnet-magic $CARDANO_NODE_MAGIC)
 
 upper_seconds=$(date +%s -d "+1 minute")
 upper_date=$(date --date="@$upper_seconds" +"%Y-%m-%dT%H:%M:%SZ")
-upper_slot=$(cardano-cli query slot-number $upper_date --testnet-magic $CARDANO_NODE_MAGIC)
+upper_slot=$(cardano-cli conway query slot-number $upper_date --testnet-magic $CARDANO_NODE_MAGIC)
 
-key_hash=$(cardano-cli address key-hash --payment-verification-key-file intermediate/merchant.vkey)
+key_hash=$(cardano-cli conway address key-hash --payment-verification-key-file intermediate/merchant.vkey)
 node create-subscription-datum.js $upper_seconds $key_hash
 
-output=$(cardano-cli transaction calculate-min-required-utxo \
+output=$(cardano-cli conway transaction calculate-min-required-utxo \
  --protocol-params-file intermediate/params.json \
  --tx-out-inline-datum-file intermediate/subscription-metadata.json \
- --tx-out $(cat subscriptor.handle_subscription.addr)+0+"1 $(cat subscriptor.handle_subscription.pol).$tokenname")
+ --tx-out $(cat subscriptor.subscriptor.spend.addr)+0+"1 $(cat subscriptor.subscriptor.spend.pol).$tokenname")
 datacost=$(cut -d' ' -f2 <<< "$output")
 
 # this is the true minimum cost for the most minimal output you can have, 
 # a UTXO going to a simple address with no ada in it, and no other data
 # you can send any amount of ada above this, but no less than this per utxo
-output=$(cardano-cli transaction calculate-min-required-utxo \
+output=$(cardano-cli conway transaction calculate-min-required-utxo \
  --protocol-params-file intermediate/params.json \
  --tx-out "$(cat intermediate/platform.addr) + 0 lovelace")
 min_cost_per_output=$(cut -d' ' -f2 <<< "$output")
@@ -56,13 +56,13 @@ cardano-cli conway transaction build --testnet-magic $CARDANO_NODE_MAGIC \
  --tx-in $user_tx_hash#$user_tx_ix \
  --tx-in-collateral $user_tx_hash#$user_tx_ix \
  --mint-tx-in-reference $minter_script_tx_hash#$minter_script_tx_ix \
- --mint-plutus-script-v2 \
+ --mint-plutus-script-v3 \
  --mint-reference-tx-in-redeemer-file unit.json \
- --policy-id $(cat subscriptor.handle_subscription.pol) \
- --mint "1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
- --tx-out $(cat subscriptor.handle_subscription.addr)+$total+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
+ --policy-id $(cat subscriptor.subscriptor.spend.pol) \
+ --mint "1 $(cat subscriptor.subscriptor.spend.pol).$tokenname" \
+ --tx-out $(cat subscriptor.subscriptor.spend.addr)+$total+"1 $(cat subscriptor.subscriptor.spend.pol).$tokenname" \
  --tx-out-inline-datum-file intermediate/subscription-metadata.json \
- --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/user.vkey) \
+ --required-signer-hash $(cardano-cli conway address key-hash --payment-verification-key-file intermediate/user.vkey) \
  --invalid-before $lower_slot \
  --invalid-hereafter $upper_slot \
  --change-address $(cat intermediate/user.addr) \

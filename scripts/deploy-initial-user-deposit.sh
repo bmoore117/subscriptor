@@ -1,10 +1,10 @@
 #!/bin/bash
 
-output=$(cardano-cli transaction calculate-min-required-utxo \
+output=$(cardano-cli conway transaction calculate-min-required-utxo \
  --protocol-params-file intermediate/params.json \
- --tx-out-reference-script-file subscriptor.handle_subscription.plutus \
+ --tx-out-reference-script-file subscriptor.subscriptor.spend.plutus \
  --tx-out-datum-hash-file unit.json \
- --tx-out "$(cat subscriptor.handle_subscription.addr) + 0") 
+ --tx-out "$(cat subscriptor.subscriptor.spend.addr) + 0") 
 
 datacost=$(cut -d' ' -f2 <<< "$output")
 
@@ -16,8 +16,8 @@ cardano-cli conway transaction build \
  --testnet-magic $CARDANO_NODE_MAGIC \
  --change-address $(cat intermediate/user.addr) \
  --tx-in $txhash#$txix \
- --tx-out "$(cat subscriptor.handle_subscription.addr) $datacost lovelace" \
- --tx-out-reference-script-file subscriptor.handle_subscription.plutus \
+ --tx-out "$(cat subscriptor.subscriptor.spend.addr) $datacost lovelace" \
+ --tx-out-reference-script-file subscriptor.subscriptor.spend.plutus \
  --tx-out-datum-hash-file unit.json \
  --out-file intermediate/user-deploy-raw.tx
 
