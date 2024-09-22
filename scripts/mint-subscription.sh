@@ -68,6 +68,10 @@ cardano-cli conway transaction build --testnet-magic $CARDANO_NODE_MAGIC \
  --change-address $(cat intermediate/user.addr) \
  --out-file intermediate/mint-raw.tx
 
+if [ $? -eq 1 ]; then
+  exit 1
+fi
+
 cardano-cli conway transaction sign \
  --tx-body-file intermediate/mint-raw.tx \
  --signing-key-file intermediate/user.skey \
