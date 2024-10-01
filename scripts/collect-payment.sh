@@ -39,16 +39,16 @@ merchant_txix=$(echo "$output" | grep -w TxOutDatumNone | tr -s ' ' | sort -nrk3
 
 platform_fee=$(node calculate-platform-tx-fee.js)
 
-output=$(cardano-cli transaction calculate-min-required-utxo \
+output=$(cardano-cli conway transaction calculate-min-required-utxo \
  --protocol-params-file intermediate/params.json \
- --tx-out $(cat subscriptor.handle_subscription.addr)+0+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
+ --tx-out $(cat subscriptor.subscriptor.spend.addr)+0+"1 $(cat subscriptor.subscriptor.spend.pol).$tokenname" \
  --tx-out-inline-datum-file intermediate/subscription-metadata-updated.json)
 anchor_output_cost=$(cut -d' ' -f2 <<< "$output")
 
 # this is the true minimum cost for the most minimal output you can have, 
 # a UTXO going to a simple address with no ada in it, and no other data
 # you can send any amount of ada above this, but no less than this per utxo
-output=$(cardano-cli transaction calculate-min-required-utxo \
+output=$(cardano-cli conway transaction calculate-min-required-utxo \
  --protocol-params-file intermediate/params.json \
  --tx-out "$(cat intermediate/platform.addr) + 0 lovelace")
 min_cost_per_output=$(cut -d' ' -f2 <<< "$output")
@@ -76,7 +76,7 @@ if (( output_total > datum_lovelace )); then
 
     # expectation is you give an additional tx with enough ada such that original tx + new tx have enough 
     # ada to cover the output total otherwise the tx will fail
-    output=$(cardano-cli query utxo --tx-in $extra_tx#$extra_tx_ix --testnet-magic ${CARDANO_NODE_MAGIC})
+    output=$(cardano-cli conway query utxo --tx-in $extra_tx#$extra_tx_ix --testnet-magic ${CARDANO_NODE_MAGIC})
     extra_datum_lovelace=$(echo "$output" | grep -w "lovelace" | tr -s ' ' | cut -d ' ' -f3)
 
     input_total=$((datum_lovelace + extra_datum_lovelace))
@@ -87,17 +87,17 @@ if (( output_total > datum_lovelace )); then
      --tx-in $extra_tx#$extra_tx_ix \
      --tx-in-collateral $merchant_txhash#$merchant_txix \
      --spending-tx-in-reference $script_txhash#$script_txix \
-     --spending-plutus-script-v2 \
+     --spending-plutus-script-v3 \
      --spending-reference-tx-in-redeemer-file collect-payment-redeemer.json \
      --tx-in-redeemer-file collect-payment-redeemer.json \
      --spending-reference-tx-in-datum-file unit.json \
      --read-only-tx-in-reference $platform_txhash#$platform_txix \
      --tx-out $(cat intermediate/merchant.addr)+$billable_amount \
      --tx-out $(cat intermediate/platform.addr)+$platform_fee \
-     --tx-out $(cat subscriptor.handle_subscription.addr)+$input_remainder+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
+     --tx-out $(cat subscriptor.subscriptor.spend.addr)+$input_remainder+"1 $(cat subscriptor.subscriptor.spend.pol).$tokenname" \
      --tx-out-inline-datum-file intermediate/subscription-metadata-updated.json \
      --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/merchant.vkey) \
-     --change-address $(cat subscriptor.handle_subscription.addr) \
+     --change-address $(cat subscriptor.subscriptor.spend.addr) \
      --out-file intermediate/collect-raw-multi-utxo.tx
 
     if [ $? -eq 1 ]; then
@@ -118,13 +118,13 @@ else
      --tx-in $datum_txhash#$datum_txix \
      --tx-in-collateral $merchant_txhash#$merchant_txix \
      --spending-tx-in-reference $script_txhash#$script_txix \
-     --spending-plutus-script-v2 \
+     --spending-plutus-script-v3 \
      --spending-reference-tx-in-redeemer-file collect-payment-redeemer.json \
      --spending-reference-tx-in-datum-file unit.json \
      --read-only-tx-in-reference $platform_txhash#$platform_txix \
      --tx-out $(cat intermediate/merchant.addr)+$billable_amount \
      --tx-out $(cat intermediate/platform.addr)+$platform_fee \
-     --tx-out $(cat subscriptor.handle_subscription.addr)+$input_remainder+"1 $(cat subscriptor.handle_subscription.pol).$tokenname" \
+     --tx-out $(cat subscriptor.subscriptor.spend.addr)+$input_remainder+"1 $(cat subscriptor.subscriptor.spend.pol).$tokenname" \
      --tx-out-inline-datum-file intermediate/subscription-metadata-updated.json \
      --required-signer-hash $(cardano-cli address key-hash --payment-verification-key-file intermediate/merchant.vkey) \
      --change-address $(cat intermediate/merchant.addr) \
