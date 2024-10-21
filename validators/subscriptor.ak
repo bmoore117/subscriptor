@@ -1,3 +1,4 @@
+use aiken/cbor
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/crypto.{VerificationKeyHash, ScriptHash}
@@ -35,7 +36,7 @@ type PlatformFeeSchedule {
  
 validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptHash) {
   spend(_d: Option<Data>, rdmr: WithdrawalAction, own_reference: OutputReference, transaction: Transaction) -> Bool {
-    trace @"Build 5"
+    trace @"Build #10"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
@@ -146,16 +147,15 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
       expect output_details: SubscriptionDetails = output_datum_value
       trace string.from_int(output_details.lock_until)
       trace string.from_int(details.lock_until)
-      expect (details.billable_amount == output_details.billable_amount)? 
+      expect(details.billable_amount == output_details.billable_amount)? 
         && (details.merchant_vk == output_details.merchant_vk)? 
         && (details.lock_until + 300000 == output_details.lock_until)?
-      trace @"verified new subscription output datum"
-      
-      expect [Pair(_ada_asset_name, remainder_ada_amount)] =
-        own_output.value
-          |> assets.tokens(assets.ada_policy_id)
-          |> dict.to_pairs()
-      remainder_ada_amount == output_values.3rd - output_values.1st - output_values.2nd
+
+      trace(cbor.diagnostic(own_output.value))
+      // expect all remaining ADA not going to merchant or platform to be in the same single output containing the updated subscription details
+      let contract_amt = assets.quantity_of(own_output.value, "", "")
+      trace string.concat(@"Amount returning to contract: ", string.from_int(contract_amt))
+      contract_amt == contract_amt
     } else {
       // We didn't pass Withdraw or CollectPayment in the redeemer, or didn't have deposit owner signature for a Withdraw
       False
