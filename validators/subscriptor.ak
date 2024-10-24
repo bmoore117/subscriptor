@@ -1,4 +1,3 @@
-use aiken/cbor
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/crypto.{VerificationKeyHash, ScriptHash}
@@ -73,6 +72,9 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
       expect details: SubscriptionDetails = anchor_datum_value
       trace @"Got subscription datum"
 
+      // expect the transaction to be signed by the merchant in the datum
+      expect list.has(transaction.extra_signatories, details.merchant_vk)
+
       // expect the platform fee schedule to be in the reference inputs
       expect [platform_input] = list.filter(reference_inputs,
         fn(input) {
@@ -88,6 +90,8 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
       expect Some(platform_output) = list.at(outputs, 0)
       let platform_collectable = math.max(platform_details.fee_percentage_basis_points * details.billable_amount / 1000, platform_details.min_utxo_cost_lovelace)
       expect platform_collectable == assets.lovelace_of(platform_output.value)
+      expect VerificationKey(subject_addr) = platform_output.address.payment_credential
+      expect subject_addr == platform_details.platform_vk
 
       // we may be spending multiple inputs to clear the subscription amount, so total up inputs
       let input_total = list.foldl(inputs, 0, fn(input, result) {
@@ -115,21 +119,15 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
       trace @"Verified output going to user has anchor & proper change return"
       
       // expect it to also have an updated datum having a billing date equal to last billing date + 5 minutes (for now, for testing)
+      // do not check merchant output(s); we know they can't be taking more than what they're due based on contract returns and platform fees
+      // we also don't need to check that it's going specifically to them; they just have to have signed the transaction
       expect InlineDatum(output_datum_value) = contract_output.datum
       expect output_details: SubscriptionDetails = output_datum_value
       trace string.from_int(output_details.lock_until)
       trace string.from_int(details.lock_until)
-      expect (details.billable_amount == output_details.billable_amount)? 
+      (details.billable_amount == output_details.billable_amount)? 
         && (details.merchant_vk == output_details.merchant_vk)? 
         && (details.lock_until + 300000 == output_details.lock_until)?
-
-      // expect the third output to be back to the merchant with at least merchant amount - prevents others from claiming
-      // also is flexible allowing merchant to have a payment output and a separate change output (as in CLI) or a single combined output
-      // this is safe as we previously verified the amount coming back to the contract and going to the platform
-      expect Some(merchant_output) = list.at(outputs, 2)
-      expect VerificationKey(subject_addr) = merchant_output.address.payment_credential
-      expect subject_addr == details.merchant_vk
-      assets.lovelace_of(merchant_output.value) >= merchant_collectible
     } else {
       // We didn't pass Withdraw or CollectPayment in the redeemer, or didn't have deposit owner signature for a Withdraw
       False
@@ -137,7 +135,7 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
   }
  
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) -> Bool {
-    trace @"Here 1"
+    trace @"Build #1"
     let Transaction { outputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
@@ -146,8 +144,7 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
         |> dict.to_pairs()
 
     // requirement: the user initiated this transaction
-    // NOTE: commenting this to generate a different build
-    // expect list.has(transaction.extra_signatories, owner_vk)
+    expect list.has(tx.extra_signatories, owner_vk)
     let Interval {
       upper_bound: IntervalBound {
         bound_type: upper_range,
