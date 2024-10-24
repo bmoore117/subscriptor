@@ -3,6 +3,7 @@ use aiken/collection/dict
 use aiken/collection/list
 use aiken/crypto.{VerificationKeyHash, ScriptHash}
 use aiken/interval.{Finite, Interval, IntervalBound}
+use aiken/math
 use aiken/primitive/bytearray
 use aiken/primitive/string
 use cardano/address.{VerificationKey, Script}
@@ -83,79 +84,52 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
       expect platform_details: PlatformFeeSchedule = platform_datum_value
       trace @"found platform datum"
 
-      // output is only allowed to merchant, platform, and back to contract
-      expect list.all(outputs, fn(output) {  
-        when output.address.payment_credential is {
-          VerificationKey(subject_addr) -> subject_addr == details.merchant_vk || subject_addr == platform_details.platform_vk
-          Script(policy_id) -> policy_id == own_policy_id 
+      // expect first output to be to platform, with proper fee
+      expect Some(platform_output) = list.at(outputs, 0)
+      let platform_collectable = math.max(platform_details.fee_percentage_basis_points * details.billable_amount / 1000, platform_details.min_utxo_cost_lovelace)
+      expect platform_collectable == assets.lovelace_of(platform_output.value)
+
+      // we may be spending multiple inputs to clear the subscription amount, so total up inputs
+      let input_total = list.foldl(inputs, 0, fn(input, result) {
+        when input.output.address.payment_credential is {
+          Script(policy_id) -> {
+            if policy_id == own_policy_id {
+              result + assets.lovelace_of(input.output.value)
+            } else {
+              result + 0
+            }
+          }
+          _other -> result + 0
         }
       })
 
-      // gather amount going to merchant, platform, and total amount of ada being moved in this transaction
-      let output_values = list.foldl(outputs, (0, 0, 0),
-        fn(output, result_values) {
-          expect [Pair(_ada_asset_name, ada_amount)] =
-            output.value
-              |> assets.tokens(assets.ada_policy_id)
-              |> dict.to_pairs()
-          when output.address.payment_credential is {
-            VerificationKey(subject_addr) ->
-              if subject_addr == details.merchant_vk {
-                (ada_amount + result_values.1st, result_values.2nd, ada_amount + result_values.3rd)
-              } else {
-                (result_values.1st, ada_amount + result_values.2nd, ada_amount + result_values.3rd)
-              }
-            _contract -> (result_values.1st, result_values.2nd, ada_amount + result_values.3rd)
-          }
-        }
-      )
+      // establish how much should be coming back to the contract once the platform fee and the merchant collectible are subtracted
+      let merchant_collectible = math.max(details.billable_amount, platform_details.min_utxo_cost_lovelace)
+      let contract_return = input_total - platform_collectable - merchant_collectible
       
-      trace string.concat(@"Total merchant amount: ", string.from_int(output_values.1st))
-      trace string.concat(@"Billable amount: ", string.from_int(details.billable_amount))
-      expect if (details.billable_amount < platform_details.min_utxo_cost_lovelace) {
-        output_values.1st == platform_details.min_utxo_cost_lovelace
-      } else {
-        output_values.1st == details.billable_amount
-      }
-      trace @"verified merchant receipt"
+      // expect the second output to be back to the contract with this amount
+      expect Some(contract_output) = list.at(outputs, 1)
+      expect contract_output.address.payment_credential == Script(own_policy_id)
+      expect contract_return == assets.lovelace_of(contract_output.value)
+      expect assets.quantity_of(contract_output.value, own_policy_id, subscription_details_asset_name) == 1
+      trace @"Verified output going to user has anchor & proper change return"
       
-      trace string.concat(@"Total platform amount: ",string.from_int(output_values.2nd))
-      let platform_collectable = platform_details.fee_percentage_basis_points * details.billable_amount / 1000
-      expect if (platform_collectable < platform_details.min_utxo_cost_lovelace) {
-        output_values.2nd == platform_details.min_utxo_cost_lovelace
-      } else {
-        output_values.2nd == platform_collectable
-      }
-      trace @"verified platform receipt"
-      
-      // expect anchor to be in the outputs and require it to also be going back to the user's deposits
-      expect [own_output] = list.filter(outputs,
-        fn(output: Output) {
-          assets.quantity_of(
-            output.value,
-            own_policy_id,
-            subscription_details_asset_name,
-          ) == 1 && output.address.payment_credential == Script(
-            own_policy_id,
-          )
-        },
-      )
-      trace @"verified anchor in outputs"
-
-      // expect it to have an updated datum having a billing date equal to last billing date + 5 minutes (for now, for testing)
-      expect InlineDatum(output_datum_value) = own_output.datum
+      // expect it to also have an updated datum having a billing date equal to last billing date + 5 minutes (for now, for testing)
+      expect InlineDatum(output_datum_value) = contract_output.datum
       expect output_details: SubscriptionDetails = output_datum_value
       trace string.from_int(output_details.lock_until)
       trace string.from_int(details.lock_until)
-      expect(details.billable_amount == output_details.billable_amount)? 
+      expect (details.billable_amount == output_details.billable_amount)? 
         && (details.merchant_vk == output_details.merchant_vk)? 
         && (details.lock_until + 300000 == output_details.lock_until)?
 
-      trace(cbor.diagnostic(own_output.value))
-      // expect all remaining ADA not going to merchant or platform to be in the same single output containing the updated subscription details
-      let contract_amt = assets.quantity_of(own_output.value, "", "")
-      trace string.concat(@"Amount returning to contract: ", string.from_int(contract_amt))
-      contract_amt == contract_amt
+      // expect the third output to be back to the merchant with at least merchant amount - prevents others from claiming
+      // also is flexible allowing merchant to have a payment output and a separate change output (as in CLI) or a single combined output
+      // this is safe as we previously verified the amount coming back to the contract and going to the platform
+      expect Some(merchant_output) = list.at(outputs, 2)
+      expect VerificationKey(subject_addr) = merchant_output.address.payment_credential
+      expect subject_addr == details.merchant_vk
+      assets.lovelace_of(merchant_output.value) >= merchant_collectible
     } else {
       // We didn't pass Withdraw or CollectPayment in the redeemer, or didn't have deposit owner signature for a Withdraw
       False
