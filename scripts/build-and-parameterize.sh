@@ -1,6 +1,9 @@
 #!/bin/bash
 
 cd ..
+build_number=$(grep "Build #" validators/subscriptor.ak | head -1 | grep -Po '[0-9]+')
+build_number=$((build_number + 1))
+sed -r -i "s/(Build \#)([0-9]+)/\1$build_number/" validators/subscriptor.ak
 aiken build -t verbose
 mv plutus.json scripts
 cd scripts

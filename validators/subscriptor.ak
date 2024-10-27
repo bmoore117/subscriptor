@@ -36,7 +36,8 @@ type PlatformFeeSchedule {
  
 validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptHash) {
   spend(_d: Option<Data>, rdmr: WithdrawalAction, own_reference: OutputReference, transaction: Transaction) -> Bool {
-    trace @"Build #10"
+    // do not update, incremented automatically
+    trace @"Build #1"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
@@ -125,9 +126,9 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
       expect output_details: SubscriptionDetails = output_datum_value
       trace string.from_int(output_details.lock_until)
       trace string.from_int(details.lock_until)
+      expect details.lock_until + 300000 == output_details.lock_until
       (details.billable_amount == output_details.billable_amount)? 
         && (details.merchant_vk == output_details.merchant_vk)? 
-        && (details.lock_until + 300000 == output_details.lock_until)?
     } else {
       // We didn't pass Withdraw or CollectPayment in the redeemer, or didn't have deposit owner signature for a Withdraw
       False
@@ -135,6 +136,7 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
   }
  
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) -> Bool {
+    // do not update, incremented automatically
     trace @"Build #1"
     let Transaction { outputs, mint, validity_range, .. } = tx
 
@@ -169,7 +171,6 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
 
     when rdmr is {
       MintAnchor -> {
-        trace @"Here 2"
         // requirement: anchor asset name must start with CIP68 prefix
         let cip_68_reference_prefixed =
           when bytearray.index_of(minted_asset_name, #"000643b0") is {
@@ -177,7 +178,6 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
             _other -> False
           }
 
-        trace @"Here 3"
         // requirement: anchor needs to go to a UTXO at this script's address, in the form of an inline datum. There should only be 1 output datum across all the outputs
         expect [Output { datum: InlineDatum(output_datum), .. }] =
           list.filter(
@@ -186,10 +186,8 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
               output.address.payment_credential == Script(own_policy_id)
             }
           )
-        
         expect new_subscription_details: SubscriptionDetails = output_datum
 
-        trace @"Here 4"
         // requirements: 1 anchor is minted by the owner, having the correct cip68 prefix, with a next billing date of 5 minutes from now, a nonzero billing amount, and a non-empty merchant_vk
         (amount == 1)? && cip_68_reference_prefixed? && (new_subscription_details.lock_until >= upper_range_value + 300000)? && (new_subscription_details.billable_amount > 0)? && !bytearray.is_empty(
           new_subscription_details.merchant_vk,
