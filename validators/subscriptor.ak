@@ -37,7 +37,7 @@ type PlatformFeeSchedule {
 validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptHash) {
   spend(_d: Option<Data>, rdmr: WithdrawalAction, own_reference: OutputReference, transaction: Transaction) -> Bool {
     // do not update, incremented automatically
-    trace @"Build #1"
+    trace @"Build #8"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
@@ -85,7 +85,7 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
       )
       expect InlineDatum(platform_datum_value) = platform_input.output.datum
       expect platform_details: PlatformFeeSchedule = platform_datum_value
-      trace @"found platform datum"
+      trace @"Found platform datum"
 
       // expect first output to be to platform, with proper fee
       expect Some(platform_output) = list.at(outputs, 0)
@@ -94,35 +94,32 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
       expect VerificationKey(subject_addr) = platform_output.address.payment_credential
       expect subject_addr == platform_details.platform_vk
 
-      // we may be spending multiple inputs to clear the subscription amount, so total up inputs
-      let input_total = list.foldl(inputs, 0, fn(input, result) {
-        when input.output.address.payment_credential is {
-          Script(policy_id) -> {
-            if policy_id == own_policy_id {
-              result + assets.lovelace_of(input.output.value)
-            } else {
-              result + 0
-            }
-          }
-          _other -> result + 0
-        }
-      })
-
-      // establish how much should be coming back to the contract once the platform fee and the merchant collectible are subtracted
+      // expect second output to be to merchant, with billable amount
+      expect Some(merchant_output) = list.at(outputs, 1)
       let merchant_collectible = math.max(details.billable_amount, platform_details.min_utxo_cost_lovelace)
-      let contract_return = input_total - platform_collectable - merchant_collectible
+      expect VerificationKey(subject_addr) = merchant_output.address.payment_credential
+      expect subject_addr == details.merchant_vk
+      expect assets.lovelace_of(merchant_output.value) == merchant_collectible
+
+      // expect remaining outputs to be solely to us 
+      // this way we don't have to check change back to the contract, just make sure the anchor's there and has a new updated datum
+      let remaining_outputs = list.drop(outputs, 2)
+      expect list.all(remaining_outputs, fn(output) {
+        output.address.payment_credential == Script(own_policy_id)
+      })
       
-      // expect the second output to be back to the contract with this amount
-      expect Some(contract_output) = list.at(outputs, 1)
-      expect contract_output.address.payment_credential == Script(own_policy_id)
-      expect contract_return == assets.lovelace_of(contract_output.value)
-      expect assets.quantity_of(contract_output.value, own_policy_id, subscription_details_asset_name) == 1
-      trace @"Verified output going to user has anchor & proper change return"
+      // find new anchor output
+      expect [anchor_output] = list.filter(outputs,
+        fn(output) {
+          assets.quantity_of(output.value, own_policy_id, subscription_details_asset_name) == 1
+        }
+      )
+      trace @"Verified anchor output exists"
       
       // expect it to also have an updated datum having a billing date equal to last billing date + 5 minutes (for now, for testing)
       // do not check merchant output(s); we know they can't be taking more than what they're due based on contract returns and platform fees
       // we also don't need to check that it's going specifically to them; they just have to have signed the transaction
-      expect InlineDatum(output_datum_value) = contract_output.datum
+      expect InlineDatum(output_datum_value) = anchor_output.datum
       expect output_details: SubscriptionDetails = output_datum_value
       trace string.from_int(output_details.lock_until)
       trace string.from_int(details.lock_until)
@@ -137,7 +134,7 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
  
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) -> Bool {
     // do not update, incremented automatically
-    trace @"Build #1"
+    trace @"Build #8"
     let Transaction { outputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
