@@ -48,3 +48,5 @@ params.json
 
 scripts/intermediate
 last-status.txt
+
+**/node_modules
