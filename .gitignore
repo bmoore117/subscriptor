@@ -45,6 +45,7 @@ plutus.json
 *.tx
 *.pol
 params.json
+subscriptor.subscriptor.spend.json
 
 scripts/intermediate
 last-status.txt

@@ -6,7 +6,7 @@
     "scripts": {
       "execute": "node main.js",
       "parameterize": "node parameterize.js",
-      "build": "vite build",
+      "deploy": "node deploy.js",
       "preview": "vite preview"
     },
     "dependencies": {

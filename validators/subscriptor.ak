@@ -37,7 +37,7 @@ type PlatformFeeSchedule {
 validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptHash) {
   spend(_d: Option<Data>, rdmr: WithdrawalAction, own_reference: OutputReference, transaction: Transaction) -> Bool {
     // do not update, incremented automatically
-    trace @"Build #8"
+    trace @"Build #49"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
@@ -134,7 +134,7 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
  
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) -> Bool {
     // do not update, incremented automatically
-    trace @"Build #8"
+    trace @"Build #49"
     let Transaction { outputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
@@ -195,3 +195,43 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
     }
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

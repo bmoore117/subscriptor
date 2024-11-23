@@ -1,4 +1,12 @@
-import { Lucid, Blockfrost } from "@lucid-evolution/lucid";
+import { Lucid, Blockfrost, Data, Constr, CML } from "@lucid-evolution/lucid";
+import plutusJson from './subscriptor.subscriptor.spend.json' with {type: "json"}
+
+let validator = {
+  type: plutusJson.type,
+  script: plutusJson.cborHex
+};
+let unitDatum = Data.to(new Constr(0, []));
+console.log(unitDatum);
 
 process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0;
  
@@ -7,12 +15,20 @@ const lucid = await Lucid(
   "Preview"
 );
 
-let contractAddress = "addr_test1wplrkhtkrj988yjvgt85e7uv77mlxe09s6pwrx9vjv5rs3q788u5p";
-let assetName = "000643b0" + Buffer.from("TestSub").toString('hex');
-let policyId = "7e3b5d761c8a73924c42cf4cfb8cf7b7f365e58682e198ac93283844";
+lucid.selectWallet.fromPrivateKey(process.argv[2]);
+const address = await lucid.wallet().address(); // Bech32 address
+console.log("Using wallet: " + address);
 
-let utxos = await lucid.utxosAtWithUnit(contractAddress, policyId + assetName);
-let more = await lucid.utxoByUnit(policyId + assetName);
+console.log(process.argv[3]);
 
-console.log(utxos);
-console.log(more);
+let tx = await lucid.newTx().pay.ToAddressWithData(
+  process.argv[3],
+  {kind: "asHash", value: unitDatum},
+  {lovelace: 0},
+  null,
+  validator
+).complete();
+
+const signedTx = await tx.sign.withWallet().complete();
+const txHash = await signedTx.submit();
+console.log(txHash);

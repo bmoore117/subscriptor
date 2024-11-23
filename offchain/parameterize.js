@@ -29,7 +29,7 @@ if (compiledCode === "") {
     };
         
     try {
-        fs.writeFileSync(process.argv[2] + ".plutus", JSON.stringify(output));
+        fs.writeFileSync(process.argv[2] + ".json", JSON.stringify(output));
     } catch (err) {
         console.error(err);
     }
