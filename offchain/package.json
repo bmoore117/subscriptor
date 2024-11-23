@@ -5,8 +5,8 @@
     "type": "module",
     "scripts": {
       "execute": "node main.js",
-      "parameterize": "node parameterize.js",
-      "deploy": "node deploy.js",
+      "parameterize": "node --no-warnings parameterize.js",
+      "deploy": "node --no-warnings deploy.js",
       "preview": "vite preview"
     },
     "dependencies": {
