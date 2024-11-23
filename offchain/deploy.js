@@ -19,8 +19,6 @@ lucid.selectWallet.fromPrivateKey(process.argv[2]);
 const address = await lucid.wallet().address(); // Bech32 address
 console.log("Using wallet: " + address);
 
-console.log(process.argv[3]);
-
 let tx = await lucid.newTx().pay.ToAddressWithData(
   process.argv[3],
   {kind: "asHash", value: unitDatum},
