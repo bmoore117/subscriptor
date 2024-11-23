@@ -1,4 +1,4 @@
-import { Lucid, Blockfrost, Data, Constr, CML } from "@lucid-evolution/lucid";
+import { Lucid, Blockfrost, Data, Constr } from "@lucid-evolution/lucid";
 import plutusJson from './subscriptor.subscriptor.spend.json' with {type: "json"}
 
 let validator = {
