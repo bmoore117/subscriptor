@@ -6,7 +6,6 @@ let validator = {
   script: plutusJson.cborHex
 };
 let unitDatum = Data.to(new Constr(0, []));
-console.log(unitDatum);
 
 process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0;
  
