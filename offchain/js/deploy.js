@@ -1,8 +1,8 @@
 import { Lucid, Blockfrost, Data, Constr } from "@lucid-evolution/lucid";
-import plutusJson from './subscriptor.subscriptor.spend.json' with {type: "json"}
+import plutusJson from '../subscriptor.subscriptor.spend.json' with {type: "json"}
 
 let validator = {
-  type: plutusJson.type,
+  type: plutusJson.type.replace("Script", ""),
   script: plutusJson.cborHex
 };
 let unitDatum = Data.to(new Constr(0, []));
@@ -22,9 +22,9 @@ let tx = await lucid.newTx().pay.ToAddressWithData(
   process.argv[3],
   {kind: "asHash", value: unitDatum},
   {lovelace: 0},
-  null,
   validator
-).complete();
+)
+.complete();
 
 const signedTx = await tx.sign.withWallet().complete();
 const txHash = await signedTx.submit();

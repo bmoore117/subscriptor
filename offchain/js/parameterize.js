@@ -1,6 +1,6 @@
 import { applyParamsToScript } from "@lucid-evolution/lucid";
 import * as fs from 'fs';
-import plutusJson from './plutus.json' with {type: "json"}
+import plutusJson from '../plutus.json' with {type: "json"}
 
 var compiledCode = "";
 var hash = "";

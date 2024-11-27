@@ -1,13 +1,15 @@
 use aiken/collection/dict
 use aiken/collection/list
-use aiken/crypto.{VerificationKeyHash, ScriptHash}
+use aiken/crypto.{ScriptHash, VerificationKeyHash}
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/math
 use aiken/primitive/bytearray
 use aiken/primitive/string
-use cardano/address.{VerificationKey, Script}
+use cardano/address.{Script, VerificationKey}
 use cardano/assets.{PolicyId}
-use cardano/transaction.{InlineDatum, Input, NoDatum, Output, OutputReference, Transaction}
+use cardano/transaction.{
+  InlineDatum, Input, NoDatum, Output, OutputReference, Transaction,
+}
 
 pub type MintAction {
   MintAnchor
@@ -33,15 +35,26 @@ type PlatformFeeSchedule {
   platform_vk: VerificationKeyHash,
   min_utxo_cost_lovelace: Int,
 }
- 
-validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptHash) {
-  spend(_d: Option<Data>, rdmr: WithdrawalAction, own_reference: OutputReference, transaction: Transaction) -> Bool {
+
+validator subscriptor(
+  owner_vk: VerificationKeyHash,
+  platform_policy_id: ScriptHash,
+) {
+  spend(
+    _d: Option<Data>,
+    rdmr: WithdrawalAction,
+    own_reference: OutputReference,
+    transaction: Transaction,
+  ) {
     // do not update, incremented automatically
-    trace @"Build #49"
+    trace @"Build #58"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
-    if (rdmr == Withdraw)? && list.has(transaction.extra_signatories, owner_vk)? && list.all(inputs, fn(input) { input.output.datum == NoDatum })? {
+    if (rdmr == Withdraw)? && list.has(transaction.extra_signatories, owner_vk)? && list.all(
+      inputs,
+      fn(input) { input.output.datum == NoDatum },
+    )? {
       trace @"Withdrawing"
       // owner can always pull money out for any reason just like a debit card, it's their account
       // however we need to make sure they don't accidentally delete any subscription datum by spending it
@@ -49,23 +62,32 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
     } else if rdmr == CollectPayment {
       trace @"Collecting"
       // work our way to our own policy id, which should be the same as our own validator hash
-      expect Some(input) = list.find(inputs, fn(input) { input.output_reference == own_reference })
+      expect Some(input) =
+        list.find(inputs, fn(input) { input.output_reference == own_reference })
       expect Script(own_policy_id) = input.output.address.payment_credential
       trace @"Policy obtained"
 
       // in the inputs there should be total only 1 datum attached to a UTXO with our script policy ID - the one we're 
       // going to be collecting from. shouldn't have to worry about datums with other policy IDs - this script can't witness those unlocks
-      expect [anchor_input] = list.filter(inputs,
-        fn(input) {
-          when input.output.datum is {
-            InlineDatum(datum_value) -> if datum_value is SubscriptionDetails {True} else {False}
-            _other -> False
-          }
-        },
-      )
+      expect [anchor_input] =
+        list.filter(
+          inputs,
+          fn(input) {
+            when input.output.datum is {
+              InlineDatum(datum_value) ->
+                if datum_value is SubscriptionDetails {
+                  True
+                } else {
+                  False
+                }
+              _other -> False
+            }
+          },
+        )
       trace @"Got anchor"
       // get token name now we have the input it's at, so we can use to simplify below
-      expect [Pair(subscription_details_asset_name, _amount)] = dict.to_pairs(assets.tokens(anchor_input.output.value, own_policy_id))
+      expect [Pair(subscription_details_asset_name, _amount)] =
+        dict.to_pairs(assets.tokens(anchor_input.output.value, own_policy_id))
       trace @"Got asset name"
 
       // expect it to have a datum
@@ -77,45 +99,69 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
       expect list.has(transaction.extra_signatories, details.merchant_vk)
 
       // expect the platform fee schedule to be in the reference inputs
-      expect [platform_input] = list.filter(reference_inputs,
-        fn(input) {
-          // "PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
-          assets.quantity_of(input.output.value, platform_policy_id, #"000643b0506c6174666f726d4665655363686564756c65") == 1
-        }
-      )
+      expect [platform_input] =
+        list.filter(
+          reference_inputs,
+          fn(input) {
+            // "PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
+            assets.quantity_of(
+              input.output.value,
+              platform_policy_id,
+              #"000643b0506c6174666f726d4665655363686564756c65",
+            ) == 1
+          },
+        )
       expect InlineDatum(platform_datum_value) = platform_input.output.datum
       expect platform_details: PlatformFeeSchedule = platform_datum_value
       trace @"Found platform datum"
 
       // expect first output to be to platform, with proper fee
       expect Some(platform_output) = list.at(outputs, 0)
-      let platform_collectable = math.max(platform_details.fee_percentage_basis_points * details.billable_amount / 1000, platform_details.min_utxo_cost_lovelace)
+      let platform_collectable =
+        math.max(
+          platform_details.fee_percentage_basis_points * details.billable_amount / 1000,
+          platform_details.min_utxo_cost_lovelace,
+        )
       expect platform_collectable == assets.lovelace_of(platform_output.value)
-      expect VerificationKey(subject_addr) = platform_output.address.payment_credential
+      expect VerificationKey(subject_addr) =
+        platform_output.address.payment_credential
       expect subject_addr == platform_details.platform_vk
 
       // expect second output to be to merchant, with billable amount
       expect Some(merchant_output) = list.at(outputs, 1)
-      let merchant_collectible = math.max(details.billable_amount, platform_details.min_utxo_cost_lovelace)
-      expect VerificationKey(subject_addr) = merchant_output.address.payment_credential
+      let merchant_collectible =
+        math.max(
+          details.billable_amount,
+          platform_details.min_utxo_cost_lovelace,
+        )
+      expect VerificationKey(subject_addr) =
+        merchant_output.address.payment_credential
       expect subject_addr == details.merchant_vk
       expect assets.lovelace_of(merchant_output.value) == merchant_collectible
 
       // expect remaining outputs to be solely to us 
       // this way we don't have to check change back to the contract, just make sure the anchor's there and has a new updated datum
       let remaining_outputs = list.drop(outputs, 2)
-      expect list.all(remaining_outputs, fn(output) {
-        output.address.payment_credential == Script(own_policy_id)
-      })
-      
+      expect
+        list.all(
+          remaining_outputs,
+          fn(output) {
+            output.address.payment_credential == Script(own_policy_id)
+          },
+        )
       // find new anchor output
-      expect [anchor_output] = list.filter(outputs,
-        fn(output) {
-          assets.quantity_of(output.value, own_policy_id, subscription_details_asset_name) == 1
-        }
-      )
+      expect [anchor_output] =
+        list.filter(
+          outputs,
+          fn(output) {
+            assets.quantity_of(
+              output.value,
+              own_policy_id,
+              subscription_details_asset_name,
+            ) == 1
+          },
+        )
       trace @"Verified anchor output exists"
-      
       // expect it to also have an updated datum having a billing date equal to last billing date + 5 minutes (for now, for testing)
       // do not check merchant output(s); we know they can't be taking more than what they're due based on contract returns and platform fees
       // we also don't need to check that it's going specifically to them; they just have to have signed the transaction
@@ -124,17 +170,16 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
       trace string.from_int(output_details.lock_until)
       trace string.from_int(details.lock_until)
       expect details.lock_until + 300000 == output_details.lock_until
-      (details.billable_amount == output_details.billable_amount)? 
-        && (details.merchant_vk == output_details.merchant_vk)? 
+      (details.billable_amount == output_details.billable_amount)? && (details.merchant_vk == output_details.merchant_vk)?
     } else {
       // We didn't pass Withdraw or CollectPayment in the redeemer, or didn't have deposit owner signature for a Withdraw
       False
     }
   }
- 
-  mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) -> Bool {
+
+  mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) {
     // do not update, incremented automatically
-    trace @"Build #49"
+    trace @"Build #58"
     let Transaction { outputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
@@ -181,7 +226,7 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
             outputs,
             fn(output) {
               output.address.payment_credential == Script(own_policy_id)
-            }
+            },
           )
         expect new_subscription_details: SubscriptionDetails = output_datum
 
@@ -194,42 +239,11 @@ validator subscriptor(owner_vk: VerificationKeyHash, platform_policy_id: ScriptH
       Burn -> (amount == -1)?
     }
   }
+
+  else(_) {
+    fail
+  }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
