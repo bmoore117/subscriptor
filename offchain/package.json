@@ -4,15 +4,12 @@
     "version": "0.0.0",
     "type": "module",
     "scripts": {
-      "query-deposit-contract": "node --no-warnings js/query-deposit-contract.js",
-      "parameterize": "node --no-warnings js/parameterize.js",
-      "deploy": "node --no-warnings js/deploy.js",
-      "mint": "node --no-warnings js/mint.js"
+        "query-deposit-contract": "node --no-warnings js/query-deposit-contract.js",
+        "parameterize": "node --no-warnings js/parameterize.js",
+        "deploy": "node --no-warnings js/deploy.js",
+        "mint": "node --no-warnings --env-file=.env js/mint.js"
     },
     "dependencies": {
-      "@lucid-evolution/lucid": "^0.4.0"
-    },
-    "devDependencies": {
+        "@lucid-evolution/lucid": "^0.4.18"
     }
-  }
-  
+}

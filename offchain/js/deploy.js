@@ -28,4 +28,4 @@ let tx = await lucid.newTx().pay.ToAddressWithData(
 
 const signedTx = await tx.sign.withWallet().complete();
 const txHash = await signedTx.submit();
-console.log(txHash);
+console.log("Tx hash: " + txHash);

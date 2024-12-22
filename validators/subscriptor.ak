@@ -47,7 +47,7 @@ validator subscriptor(
     transaction: Transaction,
   ) {
     // do not update, incremented automatically
-    trace @"Build #58"
+    trace @"Build #59"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
@@ -179,7 +179,7 @@ validator subscriptor(
 
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) {
     // do not update, incremented automatically
-    trace @"Build #58"
+    trace @"Build #59"
     let Transaction { outputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
@@ -229,6 +229,8 @@ validator subscriptor(
             },
           )
         expect new_subscription_details: SubscriptionDetails = output_datum
+        trace new_subscription_details.lock_until
+        trace upper_range_value
 
         // requirements: 1 anchor is minted by the owner, having the correct cip68 prefix, with a next billing date of 5 minutes from now, a nonzero billing amount, and a non-empty merchant_vk
         (amount == 1)? && cip_68_reference_prefixed? && (new_subscription_details.lock_until >= upper_range_value + 300000)? && (new_subscription_details.billable_amount > 0)? && !bytearray.is_empty(
@@ -244,8 +246,4 @@ validator subscriptor(
     fail
   }
 }
-
-
-
-
 
