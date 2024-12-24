@@ -47,7 +47,7 @@ validator subscriptor(
     transaction: Transaction,
   ) {
     // do not update, incremented automatically
-    trace @"Build #59"
+    trace @"Build #68"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
@@ -122,10 +122,10 @@ validator subscriptor(
           platform_details.fee_percentage_basis_points * details.billable_amount / 1000,
           platform_details.min_utxo_cost_lovelace,
         )
-      expect platform_collectable == assets.lovelace_of(platform_output.value)
       expect VerificationKey(subject_addr) =
         platform_output.address.payment_credential
       expect subject_addr == platform_details.platform_vk
+      expect platform_collectable == assets.lovelace_of(platform_output.value)
 
       // expect second output to be to merchant, with billable amount
       expect Some(merchant_output) = list.at(outputs, 1)
@@ -139,33 +139,27 @@ validator subscriptor(
       expect subject_addr == details.merchant_vk
       expect assets.lovelace_of(merchant_output.value) == merchant_collectible
 
-      // expect remaining outputs to be solely to us 
-      // this way we don't have to check change back to the contract, just make sure the anchor's there and has a new updated datum
-      let remaining_outputs = list.drop(outputs, 2)
+      // expect third output to be the contract change plus updated datum
+      expect Some(contract_change) = list.at(outputs, 2)
+      trace contract_change.address.payment_credential
+      trace own_policy_id
+      trace Script(own_policy_id)
+      expect contract_change.address.payment_credential == Script(own_policy_id)
       expect
-        list.all(
-          remaining_outputs,
-          fn(output) {
-            output.address.payment_credential == Script(own_policy_id)
-          },
-        )
-      // find new anchor output
-      expect [anchor_output] =
-        list.filter(
-          outputs,
-          fn(output) {
-            assets.quantity_of(
-              output.value,
-              own_policy_id,
-              subscription_details_asset_name,
-            ) == 1
-          },
-        )
+        assets.lovelace_of(contract_change.value) >= assets.lovelace_of(
+          anchor_input.output.value,
+        ) - platform_collectable - merchant_collectible
+      expect
+        assets.quantity_of(
+          contract_change.value,
+          own_policy_id,
+          subscription_details_asset_name,
+        ) == 1
       trace @"Verified anchor output exists"
       // expect it to also have an updated datum having a billing date equal to last billing date + 5 minutes (for now, for testing)
       // do not check merchant output(s); we know they can't be taking more than what they're due based on contract returns and platform fees
       // we also don't need to check that it's going specifically to them; they just have to have signed the transaction
-      expect InlineDatum(output_datum_value) = anchor_output.datum
+      expect InlineDatum(output_datum_value) = contract_change.datum
       expect output_details: SubscriptionDetails = output_datum_value
       trace string.from_int(output_details.lock_until)
       trace string.from_int(details.lock_until)
@@ -179,7 +173,7 @@ validator subscriptor(
 
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) {
     // do not update, incremented automatically
-    trace @"Build #59"
+    trace @"Build #68"
     let Transaction { outputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
