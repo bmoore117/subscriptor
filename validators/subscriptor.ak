@@ -47,7 +47,7 @@ validator subscriptor(
     transaction: Transaction,
   ) {
     // do not update, incremented automatically
-    trace @"Build #68"
+    trace @"Build #71"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
@@ -145,10 +145,28 @@ validator subscriptor(
       trace own_policy_id
       trace Script(own_policy_id)
       expect contract_change.address.payment_credential == Script(own_policy_id)
+      // calculate total ADA from all contract input utxos
+      let contract_input_total =
+        list.foldl(
+          inputs,
+          0,
+          fn(input, total) {
+            if input.output.address.payment_credential == Script(own_policy_id) {
+              assets.lovelace_of(input.output.value) + total
+            } else {
+              0 + total
+            }
+          },
+        )
+      // wanted: a tx where the merchant must cover the fees personally, and can only have a positive net 
+      // (well, unless fees were greater than the merchant take, but we know from experience that the minimum take, i.e. the minimum utxo, exceeds fees as currently written)
+      // and where the contract does not receive any stealth ada from the merchant to re-create the anchor + datum contract utxo.
+      // verify this by asserting that the contract input must be exactly equal to and no greater than the contract total input - platform collectable - merchant collectable
+      // as being greater than this quantity would indicate that the merchant had been the victim of coin selection algorithms that signed him up for a loss, which he was probably not expecting
+      // why must the merchant cover the fees? well, because the user in general is not "doing" this transaction, they are being collected from by the merchant
+      // and because the user is our direct customer in a way the merchant isn't quite
       expect
-        assets.lovelace_of(contract_change.value) >= assets.lovelace_of(
-          anchor_input.output.value,
-        ) - platform_collectable - merchant_collectible
+        assets.lovelace_of(contract_change.value) == contract_input_total - platform_collectable - merchant_collectible
       expect
         assets.quantity_of(
           contract_change.value,
@@ -157,8 +175,6 @@ validator subscriptor(
         ) == 1
       trace @"Verified anchor output exists"
       // expect it to also have an updated datum having a billing date equal to last billing date + 5 minutes (for now, for testing)
-      // do not check merchant output(s); we know they can't be taking more than what they're due based on contract returns and platform fees
-      // we also don't need to check that it's going specifically to them; they just have to have signed the transaction
       expect InlineDatum(output_datum_value) = contract_change.datum
       expect output_details: SubscriptionDetails = output_datum_value
       trace string.from_int(output_details.lock_until)
@@ -173,7 +189,7 @@ validator subscriptor(
 
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) {
     // do not update, incremented automatically
-    trace @"Build #68"
+    trace @"Build #71"
     let Transaction { outputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
@@ -240,4 +256,3 @@ validator subscriptor(
     fail
   }
 }
-

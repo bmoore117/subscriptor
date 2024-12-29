@@ -62,7 +62,7 @@ let tx = await lucid.newTx()
 .pay.ToAddressWithData(
     process.argv[6], // sc address in bech32 addr_1 form
     {kind: "inline", value: datum},
-    {[assetName]: 1n, lovelace: 3n*converted.min_utxo_cost_lovelace},
+    {[assetName]: 1n, lovelace: 4n*converted.min_utxo_cost_lovelace},
   )
 .validFrom(lower.getTime())
 .validTo(upper.getTime())
