@@ -62,11 +62,11 @@ let tx = await lucid.newTx()
 .pay.ToAddressWithData(
     process.argv[6], // sc address in bech32 addr_1 form
     {kind: "inline", value: datum},
-    {[assetName]: 1n, lovelace: 4n*converted.min_utxo_cost_lovelace},
+    {[assetName]: 1n, lovelace: BigInt(process.argv[9])*converted.min_utxo_cost_lovelace},
   )
 .validFrom(lower.getTime())
 .validTo(upper.getTime())
-.addSigner(process.argv[9]) // user vkey in bech32 addr_1 form
+.addSigner(process.argv[10]) // user vkey in bech32 addr_1 form
 .complete();
 
 const signedTx = await tx.sign.withWallet().complete();

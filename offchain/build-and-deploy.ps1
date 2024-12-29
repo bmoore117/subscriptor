@@ -23,4 +23,4 @@ $scriptAddr | Out-File .\subscriptor.subscriptor.spend.addr -Encoding ascii
 $hash = Get-Content subscriptor.subscriptor.spend.addr -Raw | ..\scripts\bin\cardano-address.exe address inspect | ConvertFrom-Json | Select-Object spending_shared_hash
 $hash.spending_shared_hash | Out-File .\subscriptor.subscriptor.spend.pol -Encoding ascii
 
-npm run deploy -- $bech32 $scriptAddr
+npm run deploy -- $bech32 "0" $scriptAddr
