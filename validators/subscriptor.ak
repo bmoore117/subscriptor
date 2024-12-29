@@ -158,7 +158,7 @@ validator subscriptor(
       // wanted: a tx where the merchant must cover the fees personally, and can only have a positive net 
       // (well, unless fees were greater than the merchant take, but we know from experience that the minimum take, i.e. the minimum utxo, exceeds fees as currently written)
       // and where the contract does not receive any stealth ada from the merchant to re-create the anchor + datum contract utxo.
-      // verify this by asserting that the contract input must be exactly equal to and no greater than the contract total input - platform collectable - merchant collectable
+      // verify this by asserting that the contract output must be exactly equal to and no greater than the contract total input - platform collectable - merchant collectable
       // as being greater than this quantity would indicate that the merchant had been the victim of coin selection algorithms that signed him up for a loss, which he was probably not expecting
       // why must the merchant cover the fees? well, because the user in general is not "doing" this transaction, they are being collected from by the merchant
       // and because the user is our direct customer in a way the merchant isn't quite
@@ -253,4 +253,3 @@ validator subscriptor(
     fail
   }
 }
-
