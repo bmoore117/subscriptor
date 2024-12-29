@@ -47,7 +47,7 @@ validator subscriptor(
     transaction: Transaction,
   ) {
     // do not update, incremented automatically
-    trace @"Build #71"
+    trace @"Build #72"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
@@ -94,9 +94,6 @@ validator subscriptor(
       expect InlineDatum(anchor_datum_value) = anchor_input.output.datum
       expect details: SubscriptionDetails = anchor_datum_value
       trace @"Got subscription datum"
-
-      // expect the transaction to be signed by the merchant in the datum
-      expect list.has(transaction.extra_signatories, details.merchant_vk)
 
       // expect the platform fee schedule to be in the reference inputs
       expect [platform_input] =
@@ -189,7 +186,7 @@ validator subscriptor(
 
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) {
     // do not update, incremented automatically
-    trace @"Build #71"
+    trace @"Build #72"
     let Transaction { outputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
@@ -256,3 +253,4 @@ validator subscriptor(
     fail
   }
 }
+

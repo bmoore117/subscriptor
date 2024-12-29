@@ -84,7 +84,6 @@ let tx = await lucid.newTx()
   {kind: "inline", value: newDatum},
   {[assetName]: 1n, lovelace: remainder},
 )
-.addSigner(process.argv[8]) // merchant skey
 .complete();
 
 const signedTx = await tx.sign.withWallet().complete();
