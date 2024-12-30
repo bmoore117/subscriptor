@@ -48,7 +48,6 @@ let redeemer = Data.to(new Constr(1, []));
 let platformUtxos = await lucid.utxosAtWithUnit(process.argv[6], process.argv[7] + "000643b0506c6174666f726d4665655363686564756c65");
 let platformDetails = Data.from(platformUtxos[0].datum, PlatformDetails);
 
-// unit datum hash
 let referenceInputs = contractUtxos.filter(function(utxo) { return utxo.scriptRef != null});
 referenceInputs.push(platformUtxos[0]);
 
