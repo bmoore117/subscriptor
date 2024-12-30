@@ -47,7 +47,7 @@ validator subscriptor(
     transaction: Transaction,
   ) {
     // do not update, incremented automatically
-    trace @"Build #72"
+    trace @"Build #73"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
@@ -126,15 +126,11 @@ validator subscriptor(
 
       // expect second output to be to merchant, with billable amount
       expect Some(merchant_output) = list.at(outputs, 1)
-      let merchant_collectible =
-        math.max(
-          details.billable_amount,
-          platform_details.min_utxo_cost_lovelace,
-        )
       expect VerificationKey(subject_addr) =
         merchant_output.address.payment_credential
       expect subject_addr == details.merchant_vk
-      expect assets.lovelace_of(merchant_output.value) == merchant_collectible
+      expect
+        assets.lovelace_of(merchant_output.value) == details.billable_amount
 
       // expect third output to be the contract change plus updated datum
       expect Some(contract_change) = list.at(outputs, 2)
@@ -163,7 +159,7 @@ validator subscriptor(
       // why must the merchant cover the fees? well, because the user in general is not "doing" this transaction, they are being collected from by the merchant
       // and because the user is our direct customer in a way the merchant isn't quite
       expect
-        assets.lovelace_of(contract_change.value) == contract_input_total - platform_collectable - merchant_collectible
+        assets.lovelace_of(contract_change.value) == contract_input_total - platform_collectable - details.billable_amount
       expect
         assets.quantity_of(
           contract_change.value,
@@ -186,8 +182,8 @@ validator subscriptor(
 
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) {
     // do not update, incremented automatically
-    trace @"Build #72"
-    let Transaction { outputs, mint, validity_range, .. } = tx
+    trace @"Build #73"
+    let Transaction { outputs, reference_inputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
       mint
@@ -239,8 +235,25 @@ validator subscriptor(
         trace new_subscription_details.lock_until
         trace upper_range_value
 
+        // expect the platform fee schedule to be in the reference inputs
+        expect [platform_input] =
+          list.filter(
+            reference_inputs,
+            fn(input) {
+              // "PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
+              assets.quantity_of(
+                input.output.value,
+                platform_policy_id,
+                #"000643b0506c6174666f726d4665655363686564756c65",
+              ) == 1
+            },
+          )
+        expect InlineDatum(platform_datum_value) = platform_input.output.datum
+        expect platform_details: PlatformFeeSchedule = platform_datum_value
+        trace @"Found platform datum"
+
         // requirements: 1 anchor is minted by the owner, having the correct cip68 prefix, with a next billing date of 5 minutes from now, a nonzero billing amount, and a non-empty merchant_vk
-        (amount == 1)? && cip_68_reference_prefixed? && (new_subscription_details.lock_until >= upper_range_value + 300000)? && (new_subscription_details.billable_amount > 0)? && !bytearray.is_empty(
+        (amount == 1)? && cip_68_reference_prefixed? && (new_subscription_details.lock_until >= upper_range_value + 300000)? && (new_subscription_details.billable_amount >= platform_details.min_utxo_cost_lovelace)? && !bytearray.is_empty(
           new_subscription_details.merchant_vk,
         )?
       }
@@ -253,3 +266,4 @@ validator subscriptor(
     fail
   }
 }
+

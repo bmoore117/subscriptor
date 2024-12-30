@@ -54,10 +54,10 @@ referenceInputs.push(platformUtxos[0]);
 function maxBigInt(a, b) {
   return a > b ? a : b;
 }
-let platformAmount = maxBigInt(platformDetails.fee_percentage_basis_points * datum.billable_amount, platformDetails.min_utxo_cost_lovelace);
+let platformAmount = maxBigInt((platformDetails.fee_percentage_basis_points * datum.billable_amount) / 1000n, platformDetails.min_utxo_cost_lovelace);
 console.log("Platform amount: " + platformAmount);
 let merchantAmount = maxBigInt(datum.billable_amount, platformDetails.min_utxo_cost_lovelace);
-console.log("Merchant amount: " + platformAmount);
+console.log("Merchant amount: " + merchantAmount);
 
 let toSpend = [subscription[0]];
 if (toSpend[0].assets.lovelace < platformAmount + merchantAmount + 1284380n) { // experience-based lovelace amount necessary for datum + anchor
