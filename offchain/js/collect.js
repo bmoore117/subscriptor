@@ -56,15 +56,14 @@ function maxBigInt(a, b) {
 }
 let platformAmount = maxBigInt((platformDetails.fee_percentage_basis_points * datum.billable_amount) / 1000n, platformDetails.min_utxo_cost_lovelace);
 console.log("Platform amount: " + platformAmount);
-let merchantAmount = maxBigInt(datum.billable_amount, platformDetails.min_utxo_cost_lovelace);
-console.log("Merchant amount: " + merchantAmount);
+console.log("Merchant amount: " + datum.billable_amount);
 
 let toSpend = [subscription[0]];
-if (toSpend[0].assets.lovelace < platformAmount + merchantAmount + 1284380n) { // experience-based lovelace amount necessary for datum + anchor
+if (toSpend[0].assets.lovelace < platformAmount + datum.billable_amount + 1284380n) { // experience-based lovelace amount necessary for datum + anchor
   // utxos with no assets except lovelace, and no script ref
   let spendables = contractUtxos.filter(utxo => utxo.scriptRef == null && Object.keys(utxo.assets).length === 1);
   let i = 0;
-  while (toSpend.reduce((total, utxo) => total + utxo.assets.lovelace, 0n) < platformAmount + merchantAmount + 1284380n && i < spendables.length) {
+  while (toSpend.reduce((total, utxo) => total + utxo.assets.lovelace, 0n) < platformAmount + datum.billable_amount + 1284380n && i < spendables.length) {
     toSpend.push(spendables[i]);
     i++;
   }
