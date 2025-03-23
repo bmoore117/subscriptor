@@ -279,7 +279,16 @@ fn day_of_the_year_to_date(
 }
 
 fn to_string(date: DateTime) {
-  string.concat(string.concat(string.concat(string.concat(string.from_int(date.year), @"-"), format_month(date.month)), @"-"), format_day(date.day_of_month))
+  string.concat(
+    string.concat(
+      string.concat(
+        string.concat(string.from_int(date.year), @"-"),
+        format_month(date.month),
+      ),
+      @"-",
+    ),
+    format_day(date.day_of_month),
+  )
 }
 
 fn format_month(month: Int) -> String {
