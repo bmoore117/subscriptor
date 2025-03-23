@@ -13,6 +13,8 @@ const lucid = await Lucid(
 const SubscriptionDetails = Data.Object({
     lock_until: Data.Integer(),
     billable_amount: Data.Integer(),
+    billable_unit: Data.Bytes(),
+    billable_unit_name: Data.Bytes(),
     merchant_vk: Data.Bytes()
 });
 
@@ -36,7 +38,11 @@ let subscription = contractUtxos.filter(function(utxo) { return utxo.assets[asse
 let datum = Data.from(subscription[0].datum, SubscriptionDetails);
 let newDatum = Data.to(
     // now.getTime() is in milliseconds, so add 5 minutes in millis
-    { lock_until: datum.lock_until + 300000n, billable_amount: datum.billable_amount, merchant_vk: datum.merchant_vk  }, // merchant vkey hash
+    { lock_until: datum.lock_until + 300000n, 
+      billable_amount: datum.billable_amount, 
+      billable_unit: datum.billable_unit, 
+      billable_unit_name: datum.billable_unit_name,
+       merchant_vk: datum.merchant_vk  }, // merchant vkey hash
     SubscriptionDetails,
 );
 
@@ -56,6 +62,7 @@ function maxBigInt(a, b) {
 }
 let platformAmount = maxBigInt((platformDetails.fee_percentage_basis_points * datum.billable_amount) / 1000n, platformDetails.min_utxo_cost_lovelace);
 console.log("Platform amount: " + platformAmount);
+let merchantAmount = maxBigInt(datum.billable_amount, platformDetails.min_utxo_cost_lovelace);
 console.log("Merchant amount: " + datum.billable_amount);
 
 let toSpend = [subscription[0]];

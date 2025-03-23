@@ -5,8 +5,8 @@ if ($args.Count -eq 0) {
     $tokenName = $args[0]
 }
 
-if ($args.Count -eq 0) {
-    $depositAmount = Read-Host "Enter deposit amount"
+if ($args.Count -eq 1) {
+    $depositAmount = Read-Host "Enter deposit amount (integer multiples of min utxo - 4 suggested for single utxo collection example)"
 } else {
     $depositAmount = $args[1]
 }

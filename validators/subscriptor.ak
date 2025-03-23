@@ -6,7 +6,7 @@ use aiken/math
 use aiken/primitive/bytearray
 use aiken/primitive/string
 use cardano/address.{Script, VerificationKey}
-use cardano/assets.{PolicyId}
+use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction,
 }
@@ -26,6 +26,9 @@ type SubscriptionDetails {
   lock_until: Int,
   // amount in ADA to allow deducting
   billable_amount: Int,
+  // payment currency, be that ADA, stables, etc
+  billable_unit: PolicyId,
+  billable_unit_name: AssetName,
   // merchant's ID to mint spending tokens with
   merchant_vk: VerificationKeyHash,
 }
@@ -47,7 +50,7 @@ validator subscriptor(
     transaction: Transaction,
   ) {
     // do not update, incremented automatically
-    trace @"Build #73"
+    trace @"Build #74"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
@@ -114,15 +117,20 @@ validator subscriptor(
 
       // expect first output to be to platform, with proper fee
       expect Some(platform_output) = list.at(outputs, 0)
+      expect VerificationKey(subject_addr) =
+        platform_output.address.payment_credential
+      expect subject_addr == platform_details.platform_vk
       let platform_collectable =
         math.max(
           platform_details.fee_percentage_basis_points * details.billable_amount / 1000,
           platform_details.min_utxo_cost_lovelace,
         )
-      expect VerificationKey(subject_addr) =
-        platform_output.address.payment_credential
-      expect subject_addr == platform_details.platform_vk
-      expect platform_collectable == assets.lovelace_of(platform_output.value)
+      expect
+        platform_collectable == assets.quantity_of(
+          platform_output.value,
+          details.billable_unit,
+          details.billable_unit_name,
+        )
 
       // expect second output to be to merchant, with billable amount
       expect Some(merchant_output) = list.at(outputs, 1)
@@ -130,13 +138,14 @@ validator subscriptor(
         merchant_output.address.payment_credential
       expect subject_addr == details.merchant_vk
       expect
-        assets.lovelace_of(merchant_output.value) == details.billable_amount
+        assets.quantity_of(
+          merchant_output.value,
+          details.billable_unit,
+          details.billable_unit_name,
+        ) == details.billable_amount
 
       // expect third output to be the contract change plus updated datum
       expect Some(contract_change) = list.at(outputs, 2)
-      trace contract_change.address.payment_credential
-      trace own_policy_id
-      trace Script(own_policy_id)
       expect contract_change.address.payment_credential == Script(own_policy_id)
       // calculate total ADA from all contract input utxos
       let contract_input_total =
@@ -145,7 +154,11 @@ validator subscriptor(
           0,
           fn(input, total) {
             if input.output.address.payment_credential == Script(own_policy_id) {
-              assets.lovelace_of(input.output.value) + total
+              assets.quantity_of(
+                input.output.value,
+                details.billable_unit,
+                details.billable_unit_name,
+              ) + total
             } else {
               0 + total
             }
@@ -159,7 +172,11 @@ validator subscriptor(
       // why must the merchant cover the fees? well, because the user in general is not "doing" this transaction, they are being collected from by the merchant
       // and because the user is our direct customer in a way the merchant isn't quite
       expect
-        assets.lovelace_of(contract_change.value) == contract_input_total - platform_collectable - details.billable_amount
+        assets.quantity_of(
+          contract_change.value,
+          details.billable_unit,
+          details.billable_unit_name,
+        ) == contract_input_total - platform_collectable - details.billable_amount
       expect
         assets.quantity_of(
           contract_change.value,
@@ -182,7 +199,7 @@ validator subscriptor(
 
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) {
     // do not update, incremented automatically
-    trace @"Build #73"
+    trace @"Build #74"
     let Transaction { outputs, reference_inputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
@@ -266,4 +283,3 @@ validator subscriptor(
     fail
   }
 }
-

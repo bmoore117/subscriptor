@@ -20,6 +20,8 @@ upper.setMinutes(upper.getMinutes() + 1);
 const SubscriptionDetails = Data.Object({
     lock_until: Data.Integer(),
     billable_amount: Data.Integer(),
+    billable_unit: Data.Bytes(),
+    billable_unit_name: Data.Bytes(),
     merchant_vk: Data.Bytes()
 });
 
@@ -47,7 +49,11 @@ referenceInputs.push(platformUtxos[0]);
 
 let datum = Data.to(
   // now.getTime() is in milliseconds, so add 5 minutes in millis
-  { lock_until: BigInt(upper.getTime()) + 300000n, billable_amount: converted.min_utxo_cost_lovelace, merchant_vk: process.argv[2]  }, // merchant vkey hash
+  { lock_until: BigInt(upper.getTime()) + 300000n, 
+    billable_amount: converted.min_utxo_cost_lovelace, 
+    billable_unit: "",
+    billable_unit_name: "",
+    merchant_vk: process.argv[2]  }, // merchant vkey hash
   SubscriptionDetails,
 );
 console.log("Using datum: " + datum);
