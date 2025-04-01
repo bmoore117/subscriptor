@@ -5,9 +5,11 @@
     "type": "module",
     "scripts": {
         "query-deposit-contract": "node --no-warnings js/query-deposit-contract.js",
+        "query-user-balance": "node --no warnings js/query-user-balance.js",
         "parameterize": "node --no-warnings js/parameterize.js",
         "deploy": "node --no-warnings js/deploy.js",
         "mint": "node --no-warnings --env-file=.env js/mint.js",
+        "mint-stables": "node --no-warnings --env-file=.env js/mint-stables.js",
         "collect": "node --no-warnings --env-file=.env js/collect.js"
     },
     "dependencies": {
