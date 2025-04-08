@@ -47,31 +47,58 @@ let converted = Data.from(platformUtxos[0].datum, PlatformDetails);
 let referenceInputs = contractUtxos.filter(function(utxo) { return utxo.scriptRef != null});
 referenceInputs.push(platformUtxos[0]);
 
-let datum = Data.to(
-  // now.getTime() is in milliseconds, so add 5 minutes in millis
-  { lock_until: BigInt(upper.getTime()) + 300000n, 
-    billable_amount: converted.min_utxo_cost_lovelace, 
-    billable_unit: "",
-    billable_unit_name: "",
-    merchant_vk: process.argv[2]  }, // merchant vkey hash
-  SubscriptionDetails,
-);
-console.log("Using datum: " + datum);
-
 let redeemer = Data.to(new Constr(0, []));
 
-let tx = await lucid.newTx()
-.readFrom(referenceInputs)
-.mintAssets({[assetName]: 1n}, redeemer)
-.pay.ToAddressWithData(
+var tx;
+if (process.argv[9] === "") {
+  let datum = Data.to(
+    // now.getTime() is in milliseconds, so add 5 minutes in millis
+    { lock_until: BigInt(upper.getTime()) + 300000n, 
+      billable_amount: BigInt(process.argv[11])*1000000n, 
+      billable_unit: "",
+      billable_unit_name: "",
+      merchant_vk: process.argv[2]  }, // merchant vkey hash
+    SubscriptionDetails,
+  );
+  console.log("Using datum: " + datum);
+
+  tx = await lucid.newTx()
+  .readFrom(referenceInputs)
+  .mintAssets({[assetName]: 1n}, redeemer)
+  .pay.ToAddressWithData(
     process.argv[6], // sc address in bech32 addr_1 form
     {kind: "inline", value: datum},
-    {[assetName]: 1n, lovelace: BigInt(process.argv[9])*converted.min_utxo_cost_lovelace},
+    {[assetName]: 1n, lovelace: BigInt(process.argv[12])*converted.min_utxo_cost_lovelace},
   )
-.validFrom(lower.getTime())
-.validTo(upper.getTime())
-.addSigner(process.argv[10]) // user vkey in bech32 addr_1 form
-.complete();
+  .validFrom(lower.getTime())
+  .validTo(upper.getTime())
+  .addSigner(process.argv[13]) // user vkey in bech32 addr_1 form
+  .complete();
+} else {
+  let datum = Data.to(
+    // now.getTime() is in milliseconds, so add 5 minutes in millis
+    { lock_until: BigInt(upper.getTime()) + 300000n, 
+      billable_amount: BigInt(process.argv[11]), 
+      billable_unit: process.argv[9],
+      billable_unit_name: fromText(process.argv[10]),
+      merchant_vk: process.argv[2]  }, // merchant vkey hash
+    SubscriptionDetails,
+  );
+  console.log("Using datum: " + datum);
+
+  tx = await lucid.newTx()
+  .readFrom(referenceInputs)
+  .mintAssets({[assetName]: 1n}, redeemer)
+  .pay.ToAddressWithData(
+    process.argv[6], // sc address in bech32 addr_1 form
+    {kind: "inline", value: datum},
+    {[assetName]: 1n, [process.argv[9] + fromText(process.argv[10])]: BigInt(process.argv[11])},
+  )
+  .validFrom(lower.getTime())
+  .validTo(upper.getTime())
+  .addSigner(process.argv[13]) // user vkey in bech32 addr_1 form
+  .complete();
+}
 
 const signedTx = await tx.sign.withWallet().complete();
 const txHash = await signedTx.submit();

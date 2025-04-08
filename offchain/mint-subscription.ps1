@@ -1,15 +1,15 @@
-$tokenName = $null
-if ($args.Count -eq 0) {
-    $tokenName = Read-Host "Please enter a subscription name"
-} else {
-    $tokenName = $args[0]
-}
-
-if ($args.Count -eq 1) {
-    $depositAmount = Read-Host "Enter deposit amount (integer multiples of min utxo - 4 suggested for single utxo collection example)"
-} else {
-    $depositAmount = $args[1]
-}
+Param (
+    [Parameter(Mandatory=$true,Position=0)]
+    [string] $SubscriptionName,
+    [Parameter(Mandatory=$true,Position=1)]
+    [int] $DepositAmount,
+    [Parameter(Mandatory=$true,Position=2)]
+    [int] $BillableAmount,
+    [Parameter(Mandatory=$true,Position=3)]
+    [string] $TokenPolicy,
+    [Parameter(Mandatory=$true,Position=4)]
+    [string] $TokenName
+)
 
 $key = Get-Content ..\scripts\intermediate\user.skey -Raw | ConvertFrom-Json | Select-Object cborHex
 # remove leading 5820 as it is cbor header, then convert to bech32 (bech32.exe part of cardano-node installation along with cardano-cli)
@@ -23,4 +23,4 @@ $userVkey = (Get-Content ..\scripts\intermediate\user.addr -Raw).Trim()
 $platformVkey = (Get-Content ..\scripts\intermediate\platform.addr -Raw).Trim()
 $platformPolicyId = (Get-Content ..\scripts\intermediate\platform-policy.id -Raw).Trim()
 
-npm run mint $merchantVkey $bech32 $policy $tokenName $scriptAddr $platformVkey $platformPolicyId $depositAmount $userVkey
+npm run mint $merchantVkey $bech32 $policy $SubscriptionName $scriptAddr $platformVkey $platformPolicyId $TokenPolicy $TokenName $BillableAmount $DepositAmount $userVkey 

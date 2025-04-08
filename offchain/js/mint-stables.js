@@ -23,7 +23,7 @@ let assetName = "ImaginaryStablecoin";
 const tx = await lucid
   .newTx()
   .mintAssets({
-    [policyId + fromText(assetName)]: 100n,
+    [policyId + fromText(assetName)]: 10000n,
   })
   .pay.ToAddress(address, { [policyId + fromText(assetName)]: 100n })
   .attach.MintingPolicy(mintingPolicy)

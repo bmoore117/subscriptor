@@ -50,7 +50,7 @@ validator subscriptor(
     transaction: Transaction,
   ) {
     // do not update, incremented automatically
-    trace @"Build #74"
+    trace @"Build #75"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
@@ -199,7 +199,7 @@ validator subscriptor(
 
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) {
     // do not update, incremented automatically
-    trace @"Build #74"
+    trace @"Build #75"
     let Transaction { outputs, reference_inputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
@@ -269,10 +269,18 @@ validator subscriptor(
         expect platform_details: PlatformFeeSchedule = platform_datum_value
         trace @"Found platform datum"
 
-        // requirements: 1 anchor is minted by the owner, having the correct cip68 prefix, with a next billing date of 5 minutes from now, a nonzero billing amount, and a non-empty merchant_vk
-        (amount == 1)? && cip_68_reference_prefixed? && (new_subscription_details.lock_until >= upper_range_value + 300000)? && (new_subscription_details.billable_amount >= platform_details.min_utxo_cost_lovelace)? && !bytearray.is_empty(
-          new_subscription_details.merchant_vk,
-        )?
+        // requirements: 1 anchor is minted by the owner, having the correct cip68 prefix, 
+        // with a next billing date of 5 minutes from now, a nonzero billing amount if CNT, 
+        // or a billing amount over the minimum utxo if ADA, and a non-empty merchant_vk
+        expect amount == 1
+        expect cip_68_reference_prefixed
+        expect new_subscription_details.lock_until >= upper_range_value + 300000
+        expect !bytearray.is_empty(new_subscription_details.merchant_vk)
+        if new_subscription_details.billable_unit == "" {
+          new_subscription_details.billable_amount >= platform_details.min_utxo_cost_lovelace
+        } else {
+          new_subscription_details.billable_amount > 0
+        }
       }
       // TODO is it possible to check if the merchant is signing here? and then OR with owner check as well
       Burn -> (amount == -1)?
@@ -283,3 +291,4 @@ validator subscriptor(
     fail
   }
 }
+
