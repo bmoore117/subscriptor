@@ -119,7 +119,7 @@ if (billableAsset === "") {
   }
   console.log("Spending " + toSpend.length + " utxo" + (toSpend.length > 1 ? "s" : ""));
   let totalAda = toSpend.reduce((total, utxo) => total + utxo.assets.lovelace, 0n)
-  remainder = totalAda - platformAmount - merchantAmount;
+  let remainder = totalAda - platformAmount - merchantAmount;
 
   tx = await lucid.newTx()
   .readFrom(referenceInputs).collectFrom(toSpend, redeemer)

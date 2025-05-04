@@ -28,20 +28,10 @@ if (process.argv[3] === "0") {
   )
   .complete();
 } else {
-  const PlatformDetails = Data.Object({
-    fee_percentage_basis_points: Data.Integer(),
-    platform_vk: Data.Bytes(),
-    min_utxo_cost_lovelace: Data.Integer()
-  });
-
-  // "PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
-  let platformUtxos = await lucid.utxosAtWithUnit(process.argv[4], process.argv[5] + "000643b0506c6174666f726d4665655363686564756c65");
-  let converted = Data.from(platformUtxos[0].datum, PlatformDetails);
-
   tx = await lucid.newTx().pay.ToAddressWithData(
     process.argv[6],
     {kind: "inline", value: unitDatum},
-    {lovelace: BigInt(process.argv[7])*converted.min_utxo_cost_lovelace}
+    {lovelace: BigInt(process.argv[7])}
   )
   .complete();
 }

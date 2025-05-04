@@ -17,8 +17,8 @@ let anchorAssetName = process.argv[5];
 let scriptAddr = process.argv[6];
 let platformAddr = process.argv[7];
 let platformPolicyId = process.argv[8];
-let billableTokenPolicyId = process.argv[9];
-let billableTokenAssetName = process.argv[10];
+let billableTokenPolicyId = process.argv[9] === "ada" ? "" : process.argv[9];
+let billableTokenAssetName = process.argv[10] === "ada" ? "" : process.argv[10];
 let billableTokenAmount = process.argv[11];
 let billableTokenDepositAmount = process.argv[12];
 let userAddr = process.argv[13];
@@ -55,7 +55,6 @@ let contractUtxos = await lucid.utxosAt(scriptAddr);
 
 // "PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
 let platformUtxos = await lucid.utxosAtWithUnit(platformAddr, platformPolicyId + "000643b0506c6174666f726d4665655363686564756c65");
-let converted = Data.from(platformUtxos[0].datum, PlatformDetails);
 
 let referenceInputs = contractUtxos.filter(function(utxo) { return utxo.scriptRef != null});
 referenceInputs.push(platformUtxos[0]);
@@ -67,7 +66,7 @@ if (billableTokenPolicyId === "") {
   let datum = Data.to(
     // now.getTime() is in milliseconds, so add 5 minutes in millis
     { lock_until: BigInt(upper.getTime()) + 300000n, 
-      billable_amount: BigInt(billableTokenAmount)*1000000n, 
+      billable_amount: BigInt(billableTokenAmount), 
       billable_unit: "",
       billable_unit_name: "",
       merchant_vk: merchantVkey }, // merchant vkey hash
@@ -81,7 +80,7 @@ if (billableTokenPolicyId === "") {
   .pay.ToAddressWithData(
     scriptAddr, // sc address in bech32 addr_1 form
     {kind: "inline", value: datum},
-    {[assetName]: 1n, lovelace: BigInt(billableTokenDepositAmount)*converted.min_utxo_cost_lovelace},
+    {[assetName]: 1n, lovelace: BigInt(billableTokenDepositAmount)},
   )
   .validFrom(lower.getTime())
   .validTo(upper.getTime())
