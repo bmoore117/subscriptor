@@ -50,7 +50,7 @@ validator subscriptor(
     transaction: Transaction,
   ) {
     // do not update, incremented automatically
-    trace @"Build #75"
+    trace @"Build #81"
     let Transaction { inputs, outputs, reference_inputs, .. } = transaction
     trace @"Got context"
 
@@ -115,16 +115,23 @@ validator subscriptor(
       expect platform_details: PlatformFeeSchedule = platform_datum_value
       trace @"Found platform datum"
 
+      let collection_currency_ada =
+        details.billable_unit == assets.ada_policy_id
+
       // expect first output to be to platform, with proper fee
       expect Some(platform_output) = list.at(outputs, 0)
       expect VerificationKey(subject_addr) =
         platform_output.address.payment_credential
       expect subject_addr == platform_details.platform_vk
       let platform_collectable =
-        math.max(
-          platform_details.fee_percentage_basis_points * details.billable_amount / 1000,
-          platform_details.min_utxo_cost_lovelace,
-        )
+        if collection_currency_ada {
+          math.max(
+            platform_details.fee_percentage_basis_points * details.billable_amount / 1000,
+            platform_details.min_utxo_cost_lovelace,
+          )
+        } else {
+          platform_details.fee_percentage_basis_points * details.billable_amount / 1000
+        }
       expect
         platform_collectable == assets.quantity_of(
           platform_output.value,
@@ -133,6 +140,7 @@ validator subscriptor(
         )
 
       // expect second output to be to merchant, with billable amount
+      // mint guarantees min utxo is min billable amount
       expect Some(merchant_output) = list.at(outputs, 1)
       expect VerificationKey(subject_addr) =
         merchant_output.address.payment_credential
@@ -147,7 +155,7 @@ validator subscriptor(
       // expect third output to be the contract change plus updated datum
       expect Some(contract_change) = list.at(outputs, 2)
       expect contract_change.address.payment_credential == Script(own_policy_id)
-      // calculate total ADA from all contract input utxos
+      // calculate total input from all contract input utxos
       let contract_input_total =
         list.foldl(
           inputs,
@@ -164,19 +172,40 @@ validator subscriptor(
             }
           },
         )
-      // wanted: a tx where the merchant must cover the fees personally, and can only have a positive net 
-      // (well, unless fees were greater than the merchant take, but we know from experience that the minimum take, i.e. the minimum utxo, exceeds fees as currently written)
-      // and where the contract does not receive any stealth ada from the merchant to re-create the anchor + datum contract utxo.
-      // verify this by asserting that the contract output must be exactly equal to and no greater than the contract total input - platform collectable - merchant collectable
-      // as being greater than this quantity would indicate that the merchant had been the victim of coin selection algorithms that signed him up for a loss, which he was probably not expecting
-      // why must the merchant cover the fees? well, because the user in general is not "doing" this transaction, they are being collected from by the merchant
-      // and because the user is our direct customer in a way the merchant isn't quite
       expect
         assets.quantity_of(
           contract_change.value,
           details.billable_unit,
           details.billable_unit_name,
         ) == contract_input_total - platform_collectable - details.billable_amount
+      let no_ada_received_from_tx_initiator =
+        if details.billable_unit == assets.ada_policy_id {
+          // already checked above
+          True
+        } else {
+          let input_ada =
+            list.foldl(
+              inputs,
+              0,
+              fn(input, total) {
+                if input.output.address.payment_credential == Script(
+                  own_policy_id,
+                ) {
+                  assets.lovelace_of(input.output.value) + total
+                } else {
+                  0 + total
+                }
+              },
+            )
+          let platform_ada = assets.lovelace_of(platform_output.value)
+          let merchant_ada = assets.lovelace_of(merchant_output.value)
+          // wanted: a tx where the merchant must not stealthily be charged to re-create the anchor + datum contract utxo, but does pick up the contract execution fees
+          // verify this by asserting that the contract output must be exactly equal to and no greater than the contract total input - platform collectable - merchant collectable
+          // as being greater than this quantity would indicate that the merchant had been the victim of coin selection algorithms that signed him up for a loss, which he was probably not expecting
+          assets.lovelace_of(contract_change.value) == input_ada - platform_ada - merchant_ada
+        }
+      expect no_ada_received_from_tx_initiator
+
       expect
         assets.quantity_of(
           contract_change.value,
@@ -199,7 +228,7 @@ validator subscriptor(
 
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) {
     // do not update, incremented automatically
-    trace @"Build #75"
+    trace @"Build #81"
     let Transaction { outputs, reference_inputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
@@ -276,7 +305,7 @@ validator subscriptor(
         expect cip_68_reference_prefixed
         expect new_subscription_details.lock_until >= upper_range_value + 300000
         expect !bytearray.is_empty(new_subscription_details.merchant_vk)
-        if new_subscription_details.billable_unit == "" {
+        if new_subscription_details.billable_unit == assets.ada_policy_id {
           new_subscription_details.billable_amount >= platform_details.min_utxo_cost_lovelace
         } else {
           new_subscription_details.billable_amount > 0

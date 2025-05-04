@@ -10,6 +10,19 @@ const lucid = await Lucid(
   "Preview"
 );
 
+let merchantVkey = process.argv[2];
+let userSkey = process.argv[3];
+let anchorPolicyId = process.argv[4];
+let anchorAssetName = process.argv[5];
+let scriptAddr = process.argv[6];
+let platformAddr = process.argv[7];
+let platformPolicyId = process.argv[8];
+let billableTokenPolicyId = process.argv[9];
+let billableTokenAssetName = process.argv[10];
+let billableTokenAmount = process.argv[11];
+let billableTokenDepositAmount = process.argv[12];
+let userAddr = process.argv[13];
+
 let now = new Date();
 let lower = new Date(now.getTime());
 lower.setMinutes(lower.getMinutes() - 2);
@@ -32,16 +45,16 @@ const PlatformDetails = Data.Object({
 });
 
 // user skey in bech32
-lucid.selectWallet.fromPrivateKey(process.argv[3]);
+lucid.selectWallet.fromPrivateKey(userSkey);
 const address = await lucid.wallet().address(); // Bech32 address: addr_1
 console.log("Using wallet: " + address);
 
 // policy id + CIP64 prefixed asset name
-let assetName = process.argv[4] + "000643b0" + fromText(process.argv[5]);
-let contractUtxos = await lucid.utxosAt(process.argv[6]);
+let assetName = anchorPolicyId + "000643b0" + fromText(anchorAssetName);
+let contractUtxos = await lucid.utxosAt(scriptAddr);
 
 // "PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
-let platformUtxos = await lucid.utxosAtWithUnit(process.argv[7], process.argv[8] + "000643b0506c6174666f726d4665655363686564756c65");
+let platformUtxos = await lucid.utxosAtWithUnit(platformAddr, platformPolicyId + "000643b0506c6174666f726d4665655363686564756c65");
 let converted = Data.from(platformUtxos[0].datum, PlatformDetails);
 
 let referenceInputs = contractUtxos.filter(function(utxo) { return utxo.scriptRef != null});
@@ -50,14 +63,14 @@ referenceInputs.push(platformUtxos[0]);
 let redeemer = Data.to(new Constr(0, []));
 
 var tx;
-if (process.argv[9] === "") {
+if (billableTokenPolicyId === "") {
   let datum = Data.to(
     // now.getTime() is in milliseconds, so add 5 minutes in millis
     { lock_until: BigInt(upper.getTime()) + 300000n, 
-      billable_amount: BigInt(process.argv[11])*1000000n, 
+      billable_amount: BigInt(billableTokenAmount)*1000000n, 
       billable_unit: "",
       billable_unit_name: "",
-      merchant_vk: process.argv[2]  }, // merchant vkey hash
+      merchant_vk: merchantVkey }, // merchant vkey hash
     SubscriptionDetails,
   );
   console.log("Using datum: " + datum);
@@ -66,22 +79,22 @@ if (process.argv[9] === "") {
   .readFrom(referenceInputs)
   .mintAssets({[assetName]: 1n}, redeemer)
   .pay.ToAddressWithData(
-    process.argv[6], // sc address in bech32 addr_1 form
+    scriptAddr, // sc address in bech32 addr_1 form
     {kind: "inline", value: datum},
-    {[assetName]: 1n, lovelace: BigInt(process.argv[12])*converted.min_utxo_cost_lovelace},
+    {[assetName]: 1n, lovelace: BigInt(billableTokenDepositAmount)*converted.min_utxo_cost_lovelace},
   )
   .validFrom(lower.getTime())
   .validTo(upper.getTime())
-  .addSigner(process.argv[13]) // user vkey in bech32 addr_1 form
+  .addSigner(userAddr) // user vkey in bech32 addr_1 form
   .complete();
 } else {
   let datum = Data.to(
     // now.getTime() is in milliseconds, so add 5 minutes in millis
     { lock_until: BigInt(upper.getTime()) + 300000n, 
-      billable_amount: BigInt(process.argv[11]), 
-      billable_unit: process.argv[9],
-      billable_unit_name: fromText(process.argv[10]),
-      merchant_vk: process.argv[2]  }, // merchant vkey hash
+      billable_amount: BigInt(billableTokenAmount), 
+      billable_unit: billableTokenPolicyId,
+      billable_unit_name: fromText(billableTokenAssetName),
+      merchant_vk: merchantVkey }, // merchant vkey hash
     SubscriptionDetails,
   );
   console.log("Using datum: " + datum);
@@ -90,13 +103,13 @@ if (process.argv[9] === "") {
   .readFrom(referenceInputs)
   .mintAssets({[assetName]: 1n}, redeemer)
   .pay.ToAddressWithData(
-    process.argv[6], // sc address in bech32 addr_1 form
+    scriptAddr, // sc address in bech32 addr_1 form
     {kind: "inline", value: datum},
-    {[assetName]: 1n, [process.argv[9] + fromText(process.argv[10])]: BigInt(process.argv[11])},
+    {[assetName]: 1n, [billableTokenPolicyId + fromText(billableTokenAssetName)]: BigInt(billableTokenDepositAmount)},
   )
   .validFrom(lower.getTime())
   .validTo(upper.getTime())
-  .addSigner(process.argv[13]) // user vkey in bech32 addr_1 form
+  .addSigner(userAddr) // user vkey in bech32 addr_1 form
   .complete();
 }
 
