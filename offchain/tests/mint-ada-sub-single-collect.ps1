@@ -6,3 +6,4 @@ if ($path.Path.EndsWith("offchain")) {
 }
 
 Write-Host "After deployment complete, collect with .\collect.ps1 TestSub"
+Write-Host "Collecting again after the initial serves as a test case for ada multi-collect scenarios, additional funds can be added with .\deploy-additional-funds.ps1 3396280"
