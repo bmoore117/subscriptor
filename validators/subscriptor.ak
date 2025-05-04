@@ -10,6 +10,7 @@ use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction,
 }
+use date
 
 pub type MintAction {
   MintAnchor
@@ -50,8 +51,9 @@ validator subscriptor(
     transaction: Transaction,
   ) {
     // do not update, incremented automatically
-    trace @"Build #81"
-    let Transaction { inputs, outputs, reference_inputs, .. } = transaction
+    trace @"Build #89"
+    let Transaction { inputs, reference_inputs, outputs, validity_range, .. } =
+      transaction
     trace @"Got context"
 
     if (rdmr == Withdraw)? && list.has(transaction.extra_signatories, owner_vk)? && list.all(
@@ -97,6 +99,21 @@ validator subscriptor(
       expect InlineDatum(anchor_datum_value) = anchor_input.output.datum
       expect details: SubscriptionDetails = anchor_datum_value
       trace @"Got subscription datum"
+
+      let Interval {
+        upper_bound: IntervalBound {
+          bound_type: _upper_range,
+          is_inclusive: _upper_is_inclusive,
+        },
+        lower_bound: IntervalBound {
+          bound_type: lower_range,
+          is_inclusive: _lower_is_inclusive,
+        },
+      } = validity_range
+
+      expect Finite(lower_range_value) = lower_range
+      // expect now to be after lock_until
+      expect lower_range_value > details.lock_until
 
       // expect the platform fee schedule to be in the reference inputs
       expect [platform_input] =
@@ -216,9 +233,9 @@ validator subscriptor(
       // expect it to also have an updated datum having a billing date equal to last billing date + 5 minutes (for now, for testing)
       expect InlineDatum(output_datum_value) = contract_change.datum
       expect output_details: SubscriptionDetails = output_datum_value
-      trace string.from_int(output_details.lock_until)
-      trace string.from_int(details.lock_until)
-      expect details.lock_until + 300000 == output_details.lock_until
+      let expected_lock =
+        date.determine_first_of_next_month_testing(details.lock_until)
+      expect expected_lock == output_details.lock_until
       (details.billable_amount == output_details.billable_amount)? && (details.merchant_vk == output_details.merchant_vk)?
     } else {
       // We didn't pass Withdraw or CollectPayment in the redeemer, or didn't have deposit owner signature for a Withdraw
@@ -228,7 +245,7 @@ validator subscriptor(
 
   mint(rdmr: MintAction, own_policy_id: PolicyId, tx: Transaction) {
     // do not update, incremented automatically
-    trace @"Build #81"
+    trace @"Build #89"
     let Transaction { outputs, reference_inputs, mint, validity_range, .. } = tx
 
     expect [Pair(minted_asset_name, amount)] =
@@ -320,4 +337,3 @@ validator subscriptor(
     fail
   }
 }
-

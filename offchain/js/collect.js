@@ -96,6 +96,13 @@ function maxBigInt(a, b) {
   return a > b ? a : b;
 }
 
+let now = new Date();
+let lower = new Date(now.getTime());
+lower.setMinutes(lower.getMinutes() - 2);
+
+let upper = new Date(now.getTime());
+upper.setMinutes(upper.getMinutes() + 1);
+
 let protocolParams = await lucid.config().provider.getProtocolParameters();
 let billableAsset = datum.billable_unit + datum.billable_unit_name;
 let toSpend = [subscription[0]];
@@ -130,6 +137,8 @@ if (billableAsset === "") {
     {kind: "inline", value: newDatum},
     {[anchorAsset]: 1n, lovelace: remainder},
   )
+  .validFrom(lower.getTime())
+  .validTo(upper.getTime())
   .complete();
 } else {
   let merchantAmount = datum.billable_amount;
@@ -189,6 +198,8 @@ if (billableAsset === "") {
     {kind: "inline", value: newDatum},
     {[anchorAsset]: 1n, [billableAsset]: remainder, lovelace: remainderAda},
   )
+  .validFrom(lower.getTime())
+  .validTo(upper.getTime())
   .complete();
 }
 

@@ -1,5 +1,7 @@
 use aiken/primitive/string
 
+// algorithms lifted from https://howardhinnant.github.io/date_algorithms.html
+
 type DateTime {
   // -1 if unset, otherwise known time_from_epoch offset
   posix_time: Int,
@@ -9,273 +11,94 @@ type DateTime {
 }
 
 fn determine_date(p_time: Int) -> DateTime {
-  // 1704067200 == 2024-01-01, the idea being that we can save recursive 
-  // loops by just checking if we are talking about any recent time
-  let year =
-    if p_time >= 1704067200 {
-      2024
+  let z = p_time / 86400 + 719468
+  let era =
+    if z >= 0 {
+      z
     } else {
-      1970
-    }
-
-  let posix_time_adjusted =
-    if year == 2024 {
-      p_time - 1704067200
+      z - 146096
+    } / 146097
+  let doe = z - era * 146097
+  // [0, 146096]
+  let yoe = ( doe - doe / 1460 + doe / 36524 - doe / 146096 ) / 365
+  // [0, 399]
+  let y = yoe + era * 400
+  let doy = doe - ( 365 * yoe + yoe / 4 - yoe / 100 )
+  // [0, 365]
+  let mp = ( 5 * doy + 2 ) / 153
+  // [0, 11]
+  let d = doy - ( 153 * mp + 2 ) / 5 + 1
+  // [1, 31]
+  let m =
+    if mp < 10 {
+      mp + 3
     } else {
-      p_time
+      mp - 9
     }
+  // [1, 12]
+  let final_y =
+    if m <= 2 {
+      y + 1
+    } else {
+      y
+    }
+  DateTime { posix_time: p_time, year: final_y, month: m, day_of_month: d }
+}
 
-  let date = determine_date_inner(posix_time_adjusted, year)
-  DateTime {
-    posix_time: p_time,
-    year: date.year,
-    month: date.month,
-    day_of_month: date.day_of_month,
+fn last_day_of_month_common_year(month: Int) -> Int {
+  if month == 1 {
+    31
+  } else if month == 2 {
+    28
+  } else if month == 3 {
+    31
+  } else if month == 4 {
+    30
+  } else if month == 5 {
+    31
+  } else if month == 6 {
+    30
+  } else if month == 7 {
+    31
+  } else if month == 8 {
+    31
+  } else if month == 9 {
+    30
+  } else if month == 10 {
+    31
+  } else if month == 11 {
+    30
+  } else {
+    31
   }
 }
 
-fn determine_date_inner(posix_time: Int, year: Int) -> DateTime {
-  let yins = 31536000
-  let lyins = 31622400
+fn is_leap(y: Int) -> Bool {
+  y % 4 == 0 && ( y % 100 != 0 || y % 400 == 0 )
+}
 
-  let is_leap_year =
-    if year % 4 == 0 {
-      if year % 100 == 0 {
-        if year % 400 == 0 {
-          True
-        } else {
-          False
-        }
-      } else {
-        True
-      }
-    } else {
-      False
-    }
-
-  let t =
-    if is_leap_year {
-      lyins
-    } else {
-      yins
-    }
-
-  if posix_time / t > 0 {
-    determine_date_inner(posix_time - t, year + 1)
+fn last_day_of_month(y: Int, m: Int) -> Int {
+  if m != 2 || !is_leap(y) {
+    last_day_of_month_common_year(m)
   } else {
-    day_of_the_year_to_date(year, posix_time, is_leap_year)
+    29
   }
 }
 
-fn day_of_the_year_to_date(
-  year: Int,
-  p_time: Int,
-  is_leap_year: Bool,
-) -> DateTime {
-  let dins = 86400
-  let day_of_the_year =
-    if p_time % dins == 0 {
-      p_time / dins + 1
-    } else {
-      p_time / dins + 1
-    }
-  if is_leap_year {
-    if day_of_the_year <= 31 {
-      // we are in jan
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 1,
-        day_of_month: day_of_the_year,
-      }
-    } else if day_of_the_year > 31 && day_of_the_year <= 60 {
-      // we are in feb
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 2,
-        day_of_month: day_of_the_year - 31,
-      }
-    } else if day_of_the_year > 60 && day_of_the_year <= 91 {
-      // we are in march
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 3,
-        day_of_month: day_of_the_year - 60,
-      }
-    } else if day_of_the_year > 91 && day_of_the_year <= 121 {
-      // we are in april
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 4,
-        day_of_month: day_of_the_year - 91,
-      }
-    } else if day_of_the_year > 121 && day_of_the_year <= 152 {
-      // we are in may
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 5,
-        day_of_month: day_of_the_year - 121,
-      }
-    } else if day_of_the_year > 152 && day_of_the_year <= 182 {
-      // we are in june
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 6,
-        day_of_month: day_of_the_year - 152,
-      }
-    } else if day_of_the_year > 182 && day_of_the_year <= 213 {
-      // we are in july
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 7,
-        day_of_month: day_of_the_year - 182,
-      }
-    } else if day_of_the_year > 213 && day_of_the_year <= 244 {
-      // we are in august
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 8,
-        day_of_month: day_of_the_year - 213,
-      }
-    } else if day_of_the_year > 244 && day_of_the_year <= 274 {
-      // we are in september
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 9,
-        day_of_month: day_of_the_year - 244,
-      }
-    } else if day_of_the_year > 274 && day_of_the_year <= 305 {
-      // we are in october
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 10,
-        day_of_month: day_of_the_year - 274,
-      }
-    } else if day_of_the_year > 305 && day_of_the_year <= 335 {
-      // we are in november
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 11,
-        day_of_month: day_of_the_year - 305,
-      }
-    } else {
-      // we are in december
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 12,
-        day_of_month: day_of_the_year - 335,
-      }
-    }
-  } else {
-    if day_of_the_year <= 31 {
-      // we are in jan
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 1,
-        day_of_month: day_of_the_year,
-      }
-    } else if day_of_the_year > 31 && day_of_the_year <= 59 {
-      // we are in feb
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 2,
-        day_of_month: day_of_the_year - 31,
-      }
-    } else if day_of_the_year > 59 && day_of_the_year <= 90 {
-      // we are in march
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 3,
-        day_of_month: day_of_the_year - 59,
-      }
-    } else if day_of_the_year > 90 && day_of_the_year <= 120 {
-      // we are in april
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 4,
-        day_of_month: day_of_the_year - 90,
-      }
-    } else if day_of_the_year > 120 && day_of_the_year <= 151 {
-      // we are in may
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 5,
-        day_of_month: day_of_the_year - 120,
-      }
-    } else if day_of_the_year > 151 && day_of_the_year <= 181 {
-      // we are in june
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 6,
-        day_of_month: day_of_the_year - 151,
-      }
-    } else if day_of_the_year > 181 && day_of_the_year <= 212 {
-      // we are in july
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 7,
-        day_of_month: day_of_the_year - 181,
-      }
-    } else if day_of_the_year > 212 && day_of_the_year <= 243 {
-      // we are in august
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 8,
-        day_of_month: day_of_the_year - 212,
-      }
-    } else if day_of_the_year > 243 && day_of_the_year <= 273 {
-      // we are in september
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 9,
-        day_of_month: day_of_the_year - 243,
-      }
-    } else if day_of_the_year > 273 && day_of_the_year <= 304 {
-      // we are in october
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 10,
-        day_of_month: day_of_the_year - 273,
-      }
-    } else if day_of_the_year > 304 && day_of_the_year <= 334 {
-      // we are in november
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 11,
-        day_of_month: day_of_the_year - 304,
-      }
-    } else {
-      // we are in december
-      DateTime {
-        posix_time: p_time,
-        year,
-        month: 12,
-        day_of_month: day_of_the_year - 334,
-      }
-    }
-  }
+fn determine_first_of_next_month(p_time: Int) -> Int {
+  let datetime = determine_date(p_time)
+  let last_day = last_day_of_month(datetime.year, datetime.month)
+  let remainder = last_day - datetime.day_of_month + 1
+  datetime.posix_time + remainder * 86400
+}
+
+pub fn determine_first_of_next_month_testing(p_time: Int) -> Int {
+  let datetime = determine_date(p_time)
+  let last_day = last_day_of_month(datetime.year, datetime.month)
+  let remainder = last_day - datetime.day_of_month + 1
+  let time = datetime.posix_time + remainder * 86400
+  trace time
+  p_time + 300000 + time - time
 }
 
 fn to_string(date: DateTime) {
@@ -308,12 +131,7 @@ fn format_day(day_of_month: Int) -> String {
 }
 
 test determine_date_0() {
-  determine_date(1708185253) == DateTime {
-    posix_time: 1708185253,
-    year: 2024,
-    month: 2,
-    day_of_month: 17,
-  }
+  determine_first_of_next_month(1708185253) == 1709308453
 }
 
 test determine_date_1() {
