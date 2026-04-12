@@ -150,7 +150,9 @@ if (billableAsset === "") {
   let merchantAmount = maxBigInt(datum.billable_amount, platformDetails.min_utxo_cost_lovelace);
   console.log("Merchant amount: " + merchantAmount);
   
-  let platformAmount = maxBigInt((platformDetails.fee_basis_points * datum.billable_amount) / 10000n, platformDetails.min_utxo_cost_lovelace);
+  let platformAmount = platformDetails.fee_basis_points === 0n
+    ? 0n
+    : maxBigInt((platformDetails.fee_basis_points * datum.billable_amount) / 10000n, platformDetails.min_utxo_cost_lovelace);
   console.log("Platform amount: " + platformAmount);
   
   let outputUtxo = structuredClone(toSpend[0]);
@@ -159,19 +161,23 @@ if (billableAsset === "") {
   outputUtxo.outputIndex = null;
   let minUtxo = calculateMinLovelaceFromUTxO(protocolParams.coinsPerUtxoByte, outputUtxo);
   
-  if (toSpend[0].assets.lovelace < platformAmount + merchantAmount + minUtxo) {
-    findUtxos(contractUtxos, toSpend, platformAmount + merchantAmount + minUtxo, billableAsset);
+  let targetAmount = platformAmount + merchantAmount + minUtxo;
+  if (toSpend[0].assets.lovelace < targetAmount) {
+    findUtxos(contractUtxos, toSpend, targetAmount, billableAsset);
   }
   console.log("Spending " + toSpend.length + " utxo" + (toSpend.length > 1 ? "s" : ""));
   let totalAda = toSpend.reduce((total, utxo) => total + utxo.assets.lovelace, 0n)
   let remainder = totalAda - platformAmount - merchantAmount;
 
-  tx = await lucid.newTx()
-  .readFrom(referenceInputs).collectFrom(toSpend, redeemer)
-  .pay.ToAddress(platformAddr, {lovelace: platformAmount})
-  .pay.ToAddress(merchantAddr, {lovelace: merchantAmount}) // merchant address
+  let txBuilder = lucid.newTx()
+  .readFrom(referenceInputs).collectFrom(toSpend, redeemer);
+  if (platformAmount > 0n) {
+    txBuilder = txBuilder.pay.ToAddress(platformAddr, {lovelace: platformAmount});
+  }
+  tx = await txBuilder
+  .pay.ToAddress(merchantAddr, {lovelace: merchantAmount})
   .pay.ToAddressWithData(
-    scriptAddr, // contract address
+    scriptAddr,
     {kind: "inline", value: newDatum},
     {[anchorAsset]: 1n, lovelace: remainder},
   )
@@ -200,10 +206,13 @@ if (billableAsset === "") {
   outputUtxo.outputIndex = null;
   let minUtxoContract = calculateMinLovelaceFromUTxO(protocolParams.coinsPerUtxoByte, outputUtxo);
   
-  let platformUtxo = {assets: {}}
-  platformUtxo.assets[billableAsset] = platformAmount;
-  platformUtxo.address = platformAddr;
-  let minUtxoPlatform = calculateMinLovelaceFromUTxO(protocolParams.coinsPerUtxoByte, platformUtxo);
+  let minUtxoPlatform = 0n;
+  if (platformAmount > 0n) {
+    let platformUtxo = {assets: {}};
+    platformUtxo.assets[billableAsset] = platformAmount;
+    platformUtxo.address = platformAddr;
+    minUtxoPlatform = calculateMinLovelaceFromUTxO(protocolParams.coinsPerUtxoByte, platformUtxo);
+  }
 
   let merchantUtxo = {assets: {}}
   merchantUtxo.assets[billableAsset] = merchantAmount;
@@ -227,12 +236,15 @@ if (billableAsset === "") {
   let remainder = totalCurrency - platformAmount - merchantAmount;
   let remainderAda = totalAda - minUtxoMerchant - minUtxoPlatform;
   
-  tx = await lucid.newTx()
-  .readFrom(referenceInputs).collectFrom(toSpend, redeemer)
-  .pay.ToAddress(platformAddr, {[billableAsset]: platformAmount})
-  .pay.ToAddress(merchantAddr, {[billableAsset]: merchantAmount}) // merchant address
+  let txBuilder = lucid.newTx()
+  .readFrom(referenceInputs).collectFrom(toSpend, redeemer);
+  if (platformAmount > 0n) {
+    txBuilder = txBuilder.pay.ToAddress(platformAddr, {[billableAsset]: platformAmount});
+  }
+  tx = await txBuilder
+  .pay.ToAddress(merchantAddr, {[billableAsset]: merchantAmount})
   .pay.ToAddressWithData(
-    scriptAddr, // contract address
+    scriptAddr,
     {kind: "inline", value: newDatum},
     {[anchorAsset]: 1n, [billableAsset]: remainder, lovelace: remainderAda},
   )

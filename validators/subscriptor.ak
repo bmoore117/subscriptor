@@ -163,15 +163,10 @@ validator subscriptor(
         let collection_currency_ada =
           details.billable_unit == assets.ada_policy_id
 
-        // three consecutive outputs starting at output_offset
-        expect [platform_output, merchant_output, contract_change, ..] =
-          list.drop(outputs, output_offset)
-
-        expect VerificationKey(subject_addr) =
-          platform_output.address.payment_credential
-        expect subject_addr == platform_details.platform_vk
         let platform_collectable =
-          if collection_currency_ada {
+          if platform_details.fee_basis_points == 0 {
+            0
+          } else if collection_currency_ada {
             math.max(
               platform_details.fee_basis_points * details.billable_amount / 10000,
               platform_details.min_utxo_cost_lovelace,
@@ -179,16 +174,37 @@ validator subscriptor(
           } else {
             platform_details.fee_basis_points * details.billable_amount / 10000
           }
-        expect
-          platform_collectable == assets.quantity_of(
-            platform_output.value,
-            details.billable_unit,
-            details.billable_unit_name,
-          )
 
-        expect VerificationKey(subject_addr) =
+        let remaining_outputs = list.drop(outputs, output_offset)
+
+        // When there's a platform fee, expect [platform, merchant, change, ..]
+        // When fee is zero, expect [merchant, change, ..]
+        let (merchant_output, contract_change, platform_ada) =
+          if platform_collectable > 0 {
+            expect [platform_output, merchant_output, contract_change, ..] =
+              remaining_outputs
+            expect VerificationKey(platform_addr) =
+              platform_output.address.payment_credential
+            expect platform_addr == platform_details.platform_vk
+            expect
+              platform_collectable == assets.quantity_of(
+                platform_output.value,
+                details.billable_unit,
+                details.billable_unit_name,
+              )
+            (
+              merchant_output,
+              contract_change,
+              assets.lovelace_of(platform_output.value),
+            )
+          } else {
+            expect [merchant_output, contract_change, ..] = remaining_outputs
+            (merchant_output, contract_change, 0)
+          }
+
+        expect VerificationKey(merchant_addr) =
           merchant_output.address.payment_credential
-        expect subject_addr == details.merchant_vk
+        expect merchant_addr == details.merchant_vk
         expect
           assets.quantity_of(
             merchant_output.value,
@@ -232,7 +248,6 @@ validator subscriptor(
           if collection_currency_ada {
             True
           } else {
-            let platform_ada = assets.lovelace_of(platform_output.value)
             let merchant_ada = assets.lovelace_of(merchant_output.value)
             assets.lovelace_of(contract_change.value) == ada_total - platform_ada - merchant_ada
           }
@@ -623,6 +638,100 @@ test collect_schedule_tampered_fails() fail {
     50_000_000,
     1706745600000,
     Weekly,
+  )
+}
+
+// -- CollectPayment: zero platform fee --
+
+fn test_zero_fee_platform_ref() -> Input {
+  Input(
+    OutputReference(
+      #"bb00000000000000000000000000000000000000000000000000000000000000",
+      0,
+    ),
+    Output(
+      Address(VerificationKey(test_platform), None),
+      from_lovelace(2_000_000)
+        |> add(test_platform_pol, test_platform_token, 1),
+      InlineDatum(
+        PlatformFeeSchedule {
+          fee_basis_points: 0,
+          platform_vk: test_platform,
+          min_utxo_cost_lovelace: 2_000_000,
+        },
+      ),
+      None,
+    ),
+  )
+}
+
+test collect_monthly_ada_zero_fee() {
+  // Jan 1, 2024 → Feb 1, 2024, no platform output
+  let lock_until = 1704067200000
+  let now = lock_until + 1000
+  let billable_amount = 10_000_000
+  let input_lovelace = 50_000_000
+  let next_lock_until = 1706745600000
+  let change = input_lovelace - billable_amount
+
+  let datum =
+    SubscriptionDetails {
+      lock_until,
+      billable_amount,
+      billable_unit: #"",
+      billable_unit_name: #"",
+      merchant_vk: test_merchant,
+      billing_schedule: Monthly,
+    }
+
+  let anchor_ref =
+    OutputReference(
+      #"aa00000000000000000000000000000000000000000000000000000000000000",
+      0,
+    )
+
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [
+        Input(
+          anchor_ref,
+          Output(
+            Address(Script(test_script), None),
+            from_lovelace(input_lovelace)
+              |> add(test_script, test_anchor_name, 1),
+            InlineDatum(datum),
+            None,
+          ),
+        ),
+      ],
+      reference_inputs: [test_zero_fee_platform_ref()],
+      outputs: [
+        Output(
+          Address(VerificationKey(test_merchant), None),
+          from_lovelace(billable_amount),
+          NoDatum,
+          None,
+        ),
+        Output(
+          Address(Script(test_script), None),
+          from_lovelace(change) |> add(test_script, test_anchor_name, 1),
+          InlineDatum(
+            SubscriptionDetails { ..datum, lock_until: next_lock_until },
+          ),
+          None,
+        ),
+      ],
+      validity_range: test_range(now, now + 180000),
+    }
+
+  subscriptor.spend(
+    test_owner,
+    test_platform_pol,
+    None,
+    CollectPayment(0),
+    anchor_ref,
+    tx,
   )
 }
 
