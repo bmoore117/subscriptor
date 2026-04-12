@@ -10,7 +10,7 @@ use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction,
 }
-use date
+use date.{BillingSchedule, EveryNMilliseconds}
 
 pub type MintAction {
   MintAnchor
@@ -23,15 +23,16 @@ pub type WithdrawalAction {
 }
 
 type SubscriptionDetails {
-  // POSIX time in second, e.g. 1672843961000
+  // POSIX time in milliseconds
   lock_until: Int,
-  // amount in ADA to allow deducting
+  // amount to allow deducting per billing cycle
   billable_amount: Int,
   // payment currency, be that ADA, stables, etc
   billable_unit: PolicyId,
   billable_unit_name: AssetName,
-  // merchant's ID to mint spending tokens with
+  // merchant's verification key hash
   merchant_vk: VerificationKeyHash,
+  billing_schedule: BillingSchedule,
 }
 
 type PlatformFeeSchedule {
@@ -228,9 +229,9 @@ validator subscriptor(
         expect InlineDatum(output_datum_value) = contract_change.datum
         expect output_details: SubscriptionDetails = output_datum_value
         let expected_lock =
-          date.determine_first_of_next_month_testing(details.lock_until)
+          date.next_billing_date(details.lock_until, details.billing_schedule)
         expect expected_lock == output_details.lock_until
-        (details.billable_amount == output_details.billable_amount)? && (details.merchant_vk == output_details.merchant_vk)?
+        (details.billable_amount == output_details.billable_amount)? && (details.merchant_vk == output_details.merchant_vk)? && (details.billing_schedule == output_details.billing_schedule)?
       }
     }
   }
@@ -308,12 +309,21 @@ validator subscriptor(
         trace @"Found platform datum"
 
         // requirements: 1 anchor is minted by the owner, having the correct cip68 prefix, 
-        // with a next billing date of 5 minutes from now, a nonzero billing amount if CNT, 
+        // with a given billing schedule, a nonzero billing amount if CNT, 
         // or a billing amount over the minimum utxo if ADA, and a non-empty merchant_vk
         expect amount == 1
         expect cip_68_reference_prefixed
-        expect new_subscription_details.lock_until >= upper_range_value + 300000
         expect !bytearray.is_empty(new_subscription_details.merchant_vk)
+        expect when new_subscription_details.billing_schedule is {
+          EveryNMilliseconds(n) -> n > 0
+          _ -> True
+        }
+        let expected_first_billing =
+          date.next_billing_date(
+            upper_range_value,
+            new_subscription_details.billing_schedule,
+          )
+        expect new_subscription_details.lock_until == expected_first_billing
         if new_subscription_details.billable_unit == assets.ada_policy_id {
           new_subscription_details.billable_amount >= platform_details.min_utxo_cost_lovelace
         } else {

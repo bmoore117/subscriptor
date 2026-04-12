@@ -22,6 +22,7 @@ let billableTokenAssetName = process.argv[10] === "ada" ? "" : process.argv[10];
 let billableTokenAmount = process.argv[11];
 let billableTokenDepositAmount = process.argv[12];
 let userAddr = process.argv[13];
+let billingScheduleArg = process.argv[14] || "monthly";
 
 let now = new Date();
 let lower = new Date(now.getTime());
@@ -30,13 +31,53 @@ lower.setMinutes(lower.getMinutes() - 2);
 let upper = new Date(now.getTime());
 upper.setMinutes(upper.getMinutes() + 1);
 
+const BillingSchedule = Data.Enum([
+  Data.Object({ EveryNMilliseconds: Data.Tuple([Data.Integer()]) }),
+  Data.Literal("Daily"),
+  Data.Literal("Weekly"),
+  Data.Literal("BiWeekly"),
+  Data.Literal("Monthly"),
+]);
+
 const SubscriptionDetails = Data.Object({
     lock_until: Data.Integer(),
     billable_amount: Data.Integer(),
     billable_unit: Data.Bytes(),
     billable_unit_name: Data.Bytes(),
-    merchant_vk: Data.Bytes()
+    merchant_vk: Data.Bytes(),
+    billing_schedule: BillingSchedule,
 });
+
+const DAY_MS = 86400000n;
+
+function parseBillingSchedule(arg) {
+  switch (arg.toLowerCase()) {
+    case "daily": return "Daily";
+    case "weekly": return "Weekly";
+    case "biweekly": return "BiWeekly";
+    case "monthly": return "Monthly";
+    default: return { EveryNMilliseconds: [BigInt(arg)] };
+  }
+}
+
+function computeInitialLockUntil(upperTime, schedule) {
+  const upper = BigInt(upperTime);
+  if (typeof schedule === "object" && schedule.EveryNMilliseconds) {
+    return upper + schedule.EveryNMilliseconds[0];
+  }
+  const startOfDay = (upper / DAY_MS) * DAY_MS;
+  switch (schedule) {
+    case "Daily": return startOfDay + DAY_MS;
+    case "Weekly": return startOfDay + 7n * DAY_MS;
+    case "BiWeekly": return startOfDay + 14n * DAY_MS;
+    case "Monthly": {
+      const d = new Date(upperTime);
+      return BigInt(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).getTime());
+    }
+  }
+}
+
+let billingSchedule = parseBillingSchedule(billingScheduleArg);
 
 const PlatformDetails = Data.Object({
   fee_percentage_basis_points: Data.Integer(),
@@ -61,15 +102,17 @@ referenceInputs.push(platformUtxos[0]);
 
 let redeemer = Data.to(new Constr(0, []));
 
+let initialLockUntil = computeInitialLockUntil(upper.getTime(), billingSchedule);
+
 var tx;
 if (billableTokenPolicyId === "") {
   let datum = Data.to(
-    // now.getTime() is in milliseconds, so add 5 minutes in millis
-    { lock_until: BigInt(upper.getTime()) + 300000n, 
+    { lock_until: initialLockUntil, 
       billable_amount: BigInt(billableTokenAmount), 
       billable_unit: "",
       billable_unit_name: "",
-      merchant_vk: merchantVkey }, // merchant vkey hash
+      merchant_vk: merchantVkey,
+      billing_schedule: billingSchedule },
     SubscriptionDetails,
   );
   console.log("Using datum: " + datum);
@@ -88,12 +131,12 @@ if (billableTokenPolicyId === "") {
   .complete();
 } else {
   let datum = Data.to(
-    // now.getTime() is in milliseconds, so add 5 minutes in millis
-    { lock_until: BigInt(upper.getTime()) + 300000n, 
+    { lock_until: initialLockUntil, 
       billable_amount: BigInt(billableTokenAmount), 
       billable_unit: billableTokenPolicyId,
       billable_unit_name: fromText(billableTokenAssetName),
-      merchant_vk: merchantVkey }, // merchant vkey hash
+      merchant_vk: merchantVkey,
+      billing_schedule: billingSchedule },
     SubscriptionDetails,
   );
   console.log("Using datum: " + datum);

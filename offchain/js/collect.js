@@ -19,13 +19,49 @@ let platformAddr = process.argv[6];
 let platformPolicyId = process.argv[7];
 let merchantAddr = process.argv[8];
 
+const BillingSchedule = Data.Enum([
+  Data.Object({ EveryNMilliseconds: Data.Tuple([Data.Integer()]) }),
+  Data.Literal("Daily"),
+  Data.Literal("Weekly"),
+  Data.Literal("BiWeekly"),
+  Data.Literal("Monthly"),
+]);
+
 const SubscriptionDetails = Data.Object({
     lock_until: Data.Integer(),
     billable_amount: Data.Integer(),
     billable_unit: Data.Bytes(),
     billable_unit_name: Data.Bytes(),
-    merchant_vk: Data.Bytes()
+    merchant_vk: Data.Bytes(),
+    billing_schedule: BillingSchedule,
 });
+
+const DAY_MS = 86400000n;
+
+function startOfDay(ms) {
+  return (ms / DAY_MS) * DAY_MS;
+}
+
+function nextBillingDate(lockUntil, schedule) {
+  if (typeof schedule === "object" && schedule.EveryNMilliseconds) {
+    return lockUntil + schedule.EveryNMilliseconds[0];
+  }
+  switch (schedule) {
+    case "Daily":
+      return startOfDay(lockUntil) + DAY_MS;
+    case "Weekly":
+      return startOfDay(lockUntil) + 7n * DAY_MS;
+    case "BiWeekly":
+      return startOfDay(lockUntil) + 14n * DAY_MS;
+    case "Monthly": {
+      const d = new Date(Number(lockUntil));
+      const firstOfNextMonth = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
+      return BigInt(firstOfNextMonth.getTime());
+    }
+    default:
+      throw new Error("Unknown billing schedule: " + schedule);
+  }
+}
 
 const PlatformDetails = Data.Object({
   fee_percentage_basis_points: Data.Integer(),
@@ -71,13 +107,14 @@ let contractUtxos = await lucid.utxosAt(scriptAddr);
 let anchorAsset = anchorPolicyId + "000643b0" + fromText(anchorAssetName);
 let subscription = contractUtxos.filter(function(utxo) { return utxo.assets[anchorAsset] == 1n});
 let datum = Data.from(subscription[0].datum, SubscriptionDetails);
+let newLockUntil = nextBillingDate(datum.lock_until, datum.billing_schedule);
 let newDatum = Data.to(
-    // now.getTime() is in milliseconds, so add 5 minutes in millis
-    { lock_until: datum.lock_until + 300000n, 
+    { lock_until: newLockUntil,
       billable_amount: datum.billable_amount, 
       billable_unit: datum.billable_unit, 
       billable_unit_name: datum.billable_unit_name,
-       merchant_vk: datum.merchant_vk  }, // merchant vkey hash
+      merchant_vk: datum.merchant_vk,
+      billing_schedule: datum.billing_schedule },
     SubscriptionDetails,
 );
 
