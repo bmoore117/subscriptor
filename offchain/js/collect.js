@@ -81,8 +81,9 @@ let newDatum = Data.to(
     SubscriptionDetails,
 );
 
-// Aiken enum value 1, collect
-let redeemer = Data.to(new Constr(1, []));
+// Aiken enum value 1, collect; argument is the starting output index for the
+// three consecutive subscription outputs (platform, merchant, contract change)
+let redeemer = Data.to(new Constr(1, [0n]));
 
 // 6 = platform address, 7 = platform policy id
 // "PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
