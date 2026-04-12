@@ -363,7 +363,7 @@ const test_platform_token: AssetName =
 
 // -- Test helpers --
 
-fn test_range(lower: Int, upper: Int) -> Interval<Int> {
+fn test_range(lower: Int, upper: Int) -> Interval {
   Interval {
     lower_bound: IntervalBound { bound_type: Finite(lower), is_inclusive: True },
     upper_bound: IntervalBound {

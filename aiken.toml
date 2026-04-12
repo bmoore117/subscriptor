@@ -1,14 +1,18 @@
-name = 'aiken-lang/subscriptor'
-version = '0.0.0'
-license = 'Apache-2.0'
+name = "aiken-lang/subscriptor"
+version = "0.0.0"
+compiler = "v1.1.21"
+plutus = "v3"
+license = "Apache-2.0"
 description = "Smart contract wallet supporting pull-based subscriptions"
 
 [repository]
-user = 'aiken-lang'
-project = 'subscriptor'
-platform = 'github'
+user = "aiken-lang"
+project = "subscriptor"
+platform = "github"
 
 [[dependencies]]
-name = 'aiken-lang/stdlib'
-version = '2.1.0'
-source = 'github'
+name = "aiken-lang/stdlib"
+version = "3.0.0"
+source = "github"
+
+[config]
