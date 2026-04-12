@@ -5,12 +5,12 @@ use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/math
 use aiken/primitive/bytearray
 use aiken/primitive/string
-use cardano/address.{Script, VerificationKey}
-use cardano/assets.{AssetName, PolicyId}
+use cardano/address.{Address, Script, VerificationKey}
+use cardano/assets.{AssetName, PolicyId, add, from_asset, from_lovelace}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction,
 }
-use date.{BillingSchedule, EveryNMilliseconds}
+use date.{BillingSchedule, BiWeekly, Daily, EveryNMilliseconds, Monthly, Weekly}
 
 pub type MintAction {
   MintAnchor
@@ -338,4 +338,559 @@ validator subscriptor(
   else(_) {
     fail
   }
+}
+
+// -- Test constants --
+
+const test_owner =
+  #"aabbcc00000000000000000000000000000000000000000000000001"
+
+const test_merchant =
+  #"aabbcc00000000000000000000000000000000000000000000000002"
+
+const test_platform =
+  #"aabbcc00000000000000000000000000000000000000000000000003"
+
+const test_platform_pol =
+  #"aabbcc00000000000000000000000000000000000000000000000004"
+
+const test_script =
+  #"aabbcc00000000000000000000000000000000000000000000000005"
+
+const test_anchor_name: AssetName =
+  #"000643b0537562"
+
+const test_platform_token: AssetName =
+  #"000643b0506c6174666f726d4665655363686564756c65"
+
+// -- Test helpers --
+
+fn test_range(lower: Int, upper: Int) -> Interval<Int> {
+  Interval {
+    lower_bound: IntervalBound { bound_type: Finite(lower), is_inclusive: True },
+    upper_bound: IntervalBound {
+      bound_type: Finite(upper),
+      is_inclusive: False,
+    },
+  }
+}
+
+fn test_platform_ref() -> Input {
+  Input(
+    OutputReference(
+      #"bb00000000000000000000000000000000000000000000000000000000000000",
+      0,
+    ),
+    Output(
+      Address(VerificationKey(test_platform), None),
+      from_lovelace(2_000_000)
+        |> add(test_platform_pol, test_platform_token, 1),
+      InlineDatum(
+        PlatformFeeSchedule {
+          fee_percentage_basis_points: 50,
+          platform_vk: test_platform,
+          min_utxo_cost_lovelace: 2_000_000,
+        },
+      ),
+      None,
+    ),
+  )
+}
+
+fn test_collect_ada_with(
+  lock_until: Int,
+  billable_amount: Int,
+  schedule: BillingSchedule,
+  now: Int,
+  input_lovelace: Int,
+  next_lock_until: Int,
+  output_schedule: BillingSchedule,
+) -> Bool {
+  let datum =
+    SubscriptionDetails {
+      lock_until,
+      billable_amount,
+      billable_unit: #"",
+      billable_unit_name: #"",
+      merchant_vk: test_merchant,
+      billing_schedule: schedule,
+    }
+
+  let platform_fee = math.max(50 * billable_amount / 1000, 2_000_000)
+  let change = input_lovelace - platform_fee - billable_amount
+
+  let anchor_ref =
+    OutputReference(
+      #"aa00000000000000000000000000000000000000000000000000000000000000",
+      0,
+    )
+
+  let updated_datum =
+    SubscriptionDetails {
+      ..datum,
+      lock_until: next_lock_until,
+      billing_schedule: output_schedule,
+    }
+
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [
+        Input(
+          anchor_ref,
+          Output(
+            Address(Script(test_script), None),
+            from_lovelace(input_lovelace)
+              |> add(test_script, test_anchor_name, 1),
+            InlineDatum(datum),
+            None,
+          ),
+        ),
+      ],
+      reference_inputs: [test_platform_ref()],
+      outputs: [
+        Output(
+          Address(VerificationKey(test_platform), None),
+          from_lovelace(platform_fee),
+          NoDatum,
+          None,
+        ),
+        Output(
+          Address(VerificationKey(test_merchant), None),
+          from_lovelace(billable_amount),
+          NoDatum,
+          None,
+        ),
+        Output(
+          Address(Script(test_script), None),
+          from_lovelace(change) |> add(test_script, test_anchor_name, 1),
+          InlineDatum(updated_datum),
+          None,
+        ),
+      ],
+      validity_range: test_range(now, now + 180000),
+    }
+
+  subscriptor.spend(
+    test_owner,
+    test_platform_pol,
+    None,
+    CollectPayment(0),
+    anchor_ref,
+    tx,
+  )
+}
+
+fn test_collect_ada(
+  lock_until: Int,
+  billable_amount: Int,
+  schedule: BillingSchedule,
+  now: Int,
+  input_lovelace: Int,
+  next_lock_until: Int,
+) -> Bool {
+  test_collect_ada_with(
+    lock_until,
+    billable_amount,
+    schedule,
+    now,
+    input_lovelace,
+    next_lock_until,
+    schedule,
+  )
+}
+
+// -- CollectPayment: happy-path billing schedules --
+
+test collect_monthly_ada() {
+  // Jan 1, 2024 → Feb 1, 2024
+  test_collect_ada(
+    1704067200000,
+    10_000_000,
+    Monthly,
+    1704067201000,
+    50_000_000,
+    1706745600000,
+  )
+}
+
+test collect_weekly_ada() {
+  // Jan 1, 2024 → Jan 8, 2024
+  test_collect_ada(
+    1704067200000,
+    10_000_000,
+    Weekly,
+    1704067201000,
+    50_000_000,
+    1704672000000,
+  )
+}
+
+test collect_daily_ada() {
+  // Jan 1, 2024 → Jan 2, 2024
+  test_collect_ada(
+    1704067200000,
+    10_000_000,
+    Daily,
+    1704067201000,
+    50_000_000,
+    1704153600000,
+  )
+}
+
+test collect_biweekly_ada() {
+  // Jan 1, 2024 → Jan 15, 2024
+  test_collect_ada(
+    1704067200000,
+    10_000_000,
+    BiWeekly,
+    1704067201000,
+    50_000_000,
+    1705276800000,
+  )
+}
+
+test collect_every_5min_ada() {
+  // lock_until + 300_000ms (5 minutes)
+  test_collect_ada(
+    1704067200000,
+    10_000_000,
+    EveryNMilliseconds(300000),
+    1704067201000,
+    50_000_000,
+    1704067500000,
+  )
+}
+
+test collect_monthly_feb_leap_year() {
+  // Feb 1, 2024 → Mar 1, 2024 (leap year: Feb has 29 days)
+  test_collect_ada(
+    1706745600000,
+    10_000_000,
+    Monthly,
+    1706745601000,
+    50_000_000,
+    1709251200000,
+  )
+}
+
+// -- CollectPayment: failure cases --
+
+test collect_before_lock_fails() fail {
+  // now is 1ms before lock_until — collection not yet allowed
+  test_collect_ada(
+    1704067200000,
+    10_000_000,
+    Monthly,
+    1704067199999,
+    50_000_000,
+    1706745600000,
+  )
+}
+
+test collect_wrong_next_date_fails() fail {
+  // Correct next date is Feb 1, but we pass Feb 2 (off by 1 day)
+  test_collect_ada(
+    1704067200000,
+    10_000_000,
+    Monthly,
+    1704067201000,
+    50_000_000,
+    1706832000000,
+  )
+}
+
+test collect_schedule_tampered_fails() fail {
+  // Input datum says Monthly, output datum says Weekly
+  test_collect_ada_with(
+    1704067200000,
+    10_000_000,
+    Monthly,
+    1704067201000,
+    50_000_000,
+    1706745600000,
+    Weekly,
+  )
+}
+
+// -- CollectPayment: nonzero output offset --
+
+test collect_at_nonzero_offset() {
+  // Monthly collection with 3 filler outputs before subscription outputs
+  let lock_until = 1704067200000
+  let now = lock_until + 1000
+  let billable_amount = 10_000_000
+  let input_lovelace = 50_000_000
+  let next_lock_until = 1706745600000
+  let platform_fee = 2_000_000
+  let change = input_lovelace - platform_fee - billable_amount
+
+  let datum =
+    SubscriptionDetails {
+      lock_until,
+      billable_amount,
+      billable_unit: #"",
+      billable_unit_name: #"",
+      merchant_vk: test_merchant,
+      billing_schedule: Monthly,
+    }
+
+  let anchor_ref =
+    OutputReference(
+      #"aa00000000000000000000000000000000000000000000000000000000000000",
+      0,
+    )
+
+  let filler =
+    Output(
+      Address(VerificationKey(test_merchant), None),
+      from_lovelace(1_000_000),
+      NoDatum,
+      None,
+    )
+
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [
+        Input(
+          anchor_ref,
+          Output(
+            Address(Script(test_script), None),
+            from_lovelace(input_lovelace)
+              |> add(test_script, test_anchor_name, 1),
+            InlineDatum(datum),
+            None,
+          ),
+        ),
+      ],
+      reference_inputs: [test_platform_ref()],
+      outputs: [
+        filler,
+        filler,
+        filler,
+        Output(
+          Address(VerificationKey(test_platform), None),
+          from_lovelace(platform_fee),
+          NoDatum,
+          None,
+        ),
+        Output(
+          Address(VerificationKey(test_merchant), None),
+          from_lovelace(billable_amount),
+          NoDatum,
+          None,
+        ),
+        Output(
+          Address(Script(test_script), None),
+          from_lovelace(change) |> add(test_script, test_anchor_name, 1),
+          InlineDatum(
+            SubscriptionDetails { ..datum, lock_until: next_lock_until },
+          ),
+          None,
+        ),
+      ],
+      validity_range: test_range(now, now + 180000),
+    }
+
+  subscriptor.spend(
+    test_owner,
+    test_platform_pol,
+    None,
+    CollectPayment(3),
+    anchor_ref,
+    tx,
+  )
+}
+
+// -- MintAnchor tests --
+
+test mint_monthly() {
+  // Tx submitted Dec 25, 2024 12:00 UTC, 3-min window
+  // Monthly from upper bound → Jan 1, 2025 00:00:00 UTC
+  let lower = 1735128000000
+  let upper = lower + 180000
+  let expected_lock = 1735689600000
+
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      outputs: [
+        Output(
+          Address(Script(test_script), None),
+          from_lovelace(50_000_000)
+            |> add(test_script, test_anchor_name, 1),
+          InlineDatum(
+            SubscriptionDetails {
+              lock_until: expected_lock,
+              billable_amount: 10_000_000,
+              billable_unit: #"",
+              billable_unit_name: #"",
+              merchant_vk: test_merchant,
+              billing_schedule: Monthly,
+            },
+          ),
+          None,
+        ),
+      ],
+      reference_inputs: [test_platform_ref()],
+      mint: from_asset(test_script, test_anchor_name, 1),
+      validity_range: test_range(lower, upper),
+      extra_signatories: [test_owner],
+    }
+
+  subscriptor.mint(test_owner, test_platform_pol, MintAnchor, test_script, tx)
+}
+
+test mint_daily() {
+  // Tx submitted Dec 25, 2024 12:00 UTC
+  // Daily from upper bound → Dec 26, 2024 00:00:00 UTC
+  let lower = 1735128000000
+  let upper = lower + 180000
+  let expected_lock = 1735171200000
+
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      outputs: [
+        Output(
+          Address(Script(test_script), None),
+          from_lovelace(50_000_000)
+            |> add(test_script, test_anchor_name, 1),
+          InlineDatum(
+            SubscriptionDetails {
+              lock_until: expected_lock,
+              billable_amount: 10_000_000,
+              billable_unit: #"",
+              billable_unit_name: #"",
+              merchant_vk: test_merchant,
+              billing_schedule: Daily,
+            },
+          ),
+          None,
+        ),
+      ],
+      reference_inputs: [test_platform_ref()],
+      mint: from_asset(test_script, test_anchor_name, 1),
+      validity_range: test_range(lower, upper),
+      extra_signatories: [test_owner],
+    }
+
+  subscriptor.mint(test_owner, test_platform_pol, MintAnchor, test_script, tx)
+}
+
+test mint_every_n_zero_fails() fail {
+  // EveryNMilliseconds(0) should be rejected (n must be > 0)
+  let lower = 1735128000000
+  let upper = lower + 180000
+
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      outputs: [
+        Output(
+          Address(Script(test_script), None),
+          from_lovelace(50_000_000)
+            |> add(test_script, test_anchor_name, 1),
+          InlineDatum(
+            SubscriptionDetails {
+              lock_until: upper,
+              billable_amount: 10_000_000,
+              billable_unit: #"",
+              billable_unit_name: #"",
+              merchant_vk: test_merchant,
+              billing_schedule: EveryNMilliseconds(0),
+            },
+          ),
+          None,
+        ),
+      ],
+      reference_inputs: [test_platform_ref()],
+      mint: from_asset(test_script, test_anchor_name, 1),
+      validity_range: test_range(lower, upper),
+      extra_signatories: [test_owner],
+    }
+
+  subscriptor.mint(test_owner, test_platform_pol, MintAnchor, test_script, tx)
+}
+
+// -- Burn test --
+
+test burn_succeeds() {
+  let lower = 1704067200000
+
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      mint: from_asset(test_script, test_anchor_name, -1),
+      validity_range: test_range(lower, lower + 180000),
+      extra_signatories: [test_owner],
+    }
+
+  subscriptor.mint(test_owner, test_platform_pol, Burn, test_script, tx)
+}
+
+// -- Withdraw tests --
+
+test withdraw_succeeds() {
+  let ref =
+    OutputReference(
+      #"cc00000000000000000000000000000000000000000000000000000000000000",
+      0,
+    )
+
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [
+        Input(
+          ref,
+          Output(
+            Address(Script(test_script), None),
+            from_lovelace(10_000_000),
+            NoDatum,
+            None,
+          ),
+        ),
+      ],
+      extra_signatories: [test_owner],
+    }
+
+  subscriptor.spend(test_owner, test_platform_pol, None, Withdraw, ref, tx)
+}
+
+test withdraw_with_datum_blocked() fail {
+  let ref =
+    OutputReference(
+      #"cc00000000000000000000000000000000000000000000000000000000000000",
+      0,
+    )
+
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [
+        Input(
+          ref,
+          Output(
+            Address(Script(test_script), None),
+            from_lovelace(10_000_000),
+            InlineDatum(
+              SubscriptionDetails {
+                lock_until: 1704067200000,
+                billable_amount: 10_000_000,
+                billable_unit: #"",
+                billable_unit_name: #"",
+                merchant_vk: test_merchant,
+                billing_schedule: Monthly,
+              },
+            ),
+            None,
+          ),
+        ),
+      ],
+      extra_signatories: [test_owner],
+    }
+
+  subscriptor.spend(test_owner, test_platform_pol, None, Withdraw, ref, tx)
 }
