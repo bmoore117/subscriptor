@@ -35,7 +35,7 @@ type SubscriptionDetails {
 }
 
 type PlatformFeeSchedule {
-  fee_percentage_basis_points: Int,
+  fee_basis_points: Int,
   platform_vk: VerificationKeyHash,
   min_utxo_cost_lovelace: Int,
 }
@@ -59,11 +59,26 @@ validator subscriptor(
     when rdmr is {
       Withdraw -> {
         trace @"Withdrawing"
+        expect Some(own_input) =
+          list.find(
+            inputs,
+            fn(input) { input.output_reference == own_reference },
+          )
+        expect Script(own_policy_id) =
+          own_input.output.address.payment_credential
         // owner can always pull money out for any reason just like a debit card, it's their account
         // however we need to make sure they don't accidentally delete any subscription datum by spending it
         list.has(transaction.extra_signatories, owner_vk)? && list.all(
           inputs,
-          fn(input) { input.output.datum == NoDatum },
+          fn(input) {
+            if input.output.address.payment_credential == Script(
+              own_policy_id,
+            ) {
+              input.output.datum == NoDatum
+            } else {
+              True
+            }
+          },
         )?
       }
       CollectPayment(output_offset) -> {
@@ -158,11 +173,11 @@ validator subscriptor(
         let platform_collectable =
           if collection_currency_ada {
             math.max(
-              platform_details.fee_percentage_basis_points * details.billable_amount / 1000,
+              platform_details.fee_basis_points * details.billable_amount / 10000,
               platform_details.min_utxo_cost_lovelace,
             )
           } else {
-            platform_details.fee_percentage_basis_points * details.billable_amount / 1000
+            platform_details.fee_basis_points * details.billable_amount / 10000
           }
         expect
           platform_collectable == assets.quantity_of(
@@ -235,7 +250,7 @@ validator subscriptor(
         let expected_lock =
           date.next_billing_date(details.lock_until, details.billing_schedule)
         expect expected_lock == output_details.lock_until
-        (details.billable_amount == output_details.billable_amount)? && (details.merchant_vk == output_details.merchant_vk)? && (details.billing_schedule == output_details.billing_schedule)?
+        (details.billable_amount == output_details.billable_amount)? && (details.billable_unit == output_details.billable_unit)? && (details.billable_unit_name == output_details.billable_unit_name)? && (details.merchant_vk == output_details.merchant_vk)? && (details.billing_schedule == output_details.billing_schedule)?
       }
     }
   }
@@ -385,7 +400,7 @@ fn test_platform_ref() -> Input {
         |> add(test_platform_pol, test_platform_token, 1),
       InlineDatum(
         PlatformFeeSchedule {
-          fee_percentage_basis_points: 50,
+          fee_basis_points: 50,
           platform_vk: test_platform,
           min_utxo_cost_lovelace: 2_000_000,
         },
@@ -414,7 +429,7 @@ fn test_collect_ada_with(
       billing_schedule: schedule,
     }
 
-  let platform_fee = math.max(50 * billable_amount / 1000, 2_000_000)
+  let platform_fee = math.max(50 * billable_amount / 10000, 2_000_000)
   let change = input_lovelace - platform_fee - billable_amount
 
   let anchor_ref =

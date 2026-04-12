@@ -79,12 +79,6 @@ function computeInitialLockUntil(upperTime, schedule) {
 
 let billingSchedule = parseBillingSchedule(billingScheduleArg);
 
-const PlatformDetails = Data.Object({
-  fee_percentage_basis_points: Data.Integer(),
-  platform_vk: Data.Bytes(),
-  min_utxo_cost_lovelace: Data.Integer()
-});
-
 // user skey in bech32
 lucid.selectWallet.fromPrivateKey(userSkey);
 const address = await lucid.wallet().address(); // Bech32 address: addr_1

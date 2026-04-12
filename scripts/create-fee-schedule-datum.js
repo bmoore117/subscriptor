@@ -13,13 +13,13 @@ const jsonify = (param) => {
 const fs = require('node:fs');
 import('lucid-cardano').then((Lucid) => {
     const PlatformFeeSchedule = Lucid.Data.Object({
-        fee_percentage_basis_points: Lucid.Data.Integer(),
+        fee_basis_points: Lucid.Data.Integer(),
         platform_vk: Lucid.Data.Bytes(),
         min_utxo_cost_lovelace: Lucid.Data.Integer()
     });
 
     try {
-        let jsonObject = { fee_percentage_basis_points: BigInt(process.argv[2]), platform_vk: process.argv[3], min_utxo_cost_lovelace: BigInt(process.argv[4]) }; //min utxo should be 857690, calculated elsewhere
+        let jsonObject = { fee_basis_points: BigInt(process.argv[2]), platform_vk: process.argv[3], min_utxo_cost_lovelace: BigInt(process.argv[4]) };
         let scheduleHex = Lucid.Data.to(
             jsonObject,
             PlatformFeeSchedule,

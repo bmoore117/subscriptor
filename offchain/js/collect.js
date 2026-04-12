@@ -64,7 +64,7 @@ function nextBillingDate(lockUntil, schedule) {
 }
 
 const PlatformDetails = Data.Object({
-  fee_percentage_basis_points: Data.Integer(),
+  fee_basis_points: Data.Integer(),
   platform_vk: Data.Bytes(),
   min_utxo_cost_lovelace: Data.Integer()
 });
@@ -150,7 +150,7 @@ if (billableAsset === "") {
   let merchantAmount = maxBigInt(datum.billable_amount, platformDetails.min_utxo_cost_lovelace);
   console.log("Merchant amount: " + merchantAmount);
   
-  let platformAmount = maxBigInt((platformDetails.fee_percentage_basis_points * datum.billable_amount) / 1000n, platformDetails.min_utxo_cost_lovelace);
+  let platformAmount = maxBigInt((platformDetails.fee_basis_points * datum.billable_amount) / 10000n, platformDetails.min_utxo_cost_lovelace);
   console.log("Platform amount: " + platformAmount);
   
   let outputUtxo = structuredClone(toSpend[0]);
@@ -182,7 +182,7 @@ if (billableAsset === "") {
   let merchantAmount = datum.billable_amount;
   console.log("Merchant amount: " + merchantAmount);
   
-  let platformAmount = (platformDetails.fee_percentage_basis_points * merchantAmount) / 1000n;
+  let platformAmount = (platformDetails.fee_basis_points * merchantAmount) / 10000n;
   console.log("Platform amount: " + platformAmount);
     
   if (toSpend[0].assets[billableAsset] < platformAmount + merchantAmount) {
