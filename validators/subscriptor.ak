@@ -4,7 +4,6 @@ use aiken/crypto.{ScriptHash, VerificationKeyHash}
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/math
 use aiken/primitive/bytearray
-use aiken/primitive/string
 use cardano/address.{Address, Script, VerificationKey}
 use cardano/assets.{AssetName, PolicyId, add, from_asset, from_lovelace}
 use cardano/transaction.{
@@ -69,38 +68,52 @@ validator subscriptor(
       }
       CollectPayment(output_offset) -> {
         trace @"Collecting"
-        // work our way to our own policy id, which should be the same as our own validator hash
-        expect Some(input) =
-          list.find(inputs, fn(input) { input.output_reference == own_reference })
-        expect Script(own_policy_id) = input.output.address.payment_credential
-        trace @"Policy obtained"
 
-        // in the inputs there should be total only 1 datum attached to a UTXO with our script policy ID - the one we're 
-        // going to be collecting from. shouldn't have to worry about datums with other policy IDs - this script can't witness those unlocks
-        expect [anchor_input] =
-          list.filter(
+        // Phase 1: discover own_policy_id (short-circuits on first match)
+        expect Some(own_input) =
+          list.find(
             inputs,
-            fn(input) {
+            fn(input) { input.output_reference == own_reference },
+          )
+        expect Script(own_policy_id) =
+          own_input.output.address.payment_credential
+
+        // Phase 2: single fold — extract anchor datum + compute ADA totals
+        let (found_details, found_asset_name, ada_total) =
+          list.foldl(
+            inputs,
+            (None, #"", 0),
+            fn(input, acc) {
+              let (details_acc, name_acc, ada_acc) = acc
+              let at_script =
+                input.output.address.payment_credential == Script(
+                  own_policy_id,
+                )
+              let new_ada =
+                if at_script {
+                  ada_acc + assets.lovelace_of(input.output.value)
+                } else {
+                  ada_acc
+                }
               when input.output.datum is {
-                InlineDatum(datum_value) ->
-                  if datum_value is SubscriptionDetails {
-                    True
+                InlineDatum(dv) ->
+                  if dv is SubscriptionDetails {
+                    expect details_acc == None
+                    expect [Pair(asset_name, _qty)] =
+                      dict.to_pairs(
+                        assets.tokens(input.output.value, own_policy_id),
+                      )
+                    (Some(dv), asset_name, new_ada)
                   } else {
-                    False
+                    (details_acc, name_acc, new_ada)
                   }
-                _other -> False
+                _other -> (details_acc, name_acc, new_ada)
               }
             },
           )
-        trace @"Got anchor"
-        // get token name now we have the input it's at, so we can use to simplify below
-        expect [Pair(subscription_details_asset_name, _amount)] =
-          dict.to_pairs(assets.tokens(anchor_input.output.value, own_policy_id))
-        trace @"Got asset name"
-
-        // expect it to have a datum
-        expect InlineDatum(anchor_datum_value) = anchor_input.output.datum
-        expect details: SubscriptionDetails = anchor_datum_value
+        expect Some(details_data) = found_details
+        let details: SubscriptionDetails = details_data
+        let subscription_details_asset_name = found_asset_name
         trace @"Got subscription datum"
 
         let Interval {
@@ -115,15 +128,12 @@ validator subscriptor(
         } = validity_range
 
         expect Finite(lower_range_value) = lower_range
-        // expect now to be after lock_until
         expect lower_range_value > details.lock_until
 
-        // expect the platform fee schedule to be in the reference inputs
-        expect [platform_input] =
-          list.filter(
+        expect Some(platform_input) =
+          list.find(
             reference_inputs,
             fn(input) {
-              // "PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
               assets.quantity_of(
                 input.output.value,
                 platform_policy_id,
@@ -138,8 +148,10 @@ validator subscriptor(
         let collection_currency_ada =
           details.billable_unit == assets.ada_policy_id
 
-        // three consecutive outputs starting at output_offset: platform, merchant, contract change
-        expect Some(platform_output) = list.at(outputs, output_offset)
+        // three consecutive outputs starting at output_offset
+        expect [platform_output, merchant_output, contract_change, ..] =
+          list.drop(outputs, output_offset)
+
         expect VerificationKey(subject_addr) =
           platform_output.address.payment_credential
         expect subject_addr == platform_details.platform_vk
@@ -159,7 +171,6 @@ validator subscriptor(
             details.billable_unit_name,
           )
 
-        expect Some(merchant_output) = list.at(outputs, output_offset + 1)
         expect VerificationKey(subject_addr) =
           merchant_output.address.payment_credential
         expect subject_addr == details.merchant_vk
@@ -170,25 +181,32 @@ validator subscriptor(
             details.billable_unit_name,
           ) == details.billable_amount
 
-        expect Some(contract_change) = list.at(outputs, output_offset + 2)
         expect contract_change.address.payment_credential == Script(own_policy_id)
-        // calculate total input from all contract input utxos
+
+        // For ADA billing, lovelace total was already computed in the fold.
+        // For non-ADA billing, one extra pass is needed for the token total.
         let contract_input_total =
-          list.foldl(
-            inputs,
-            0,
-            fn(input, total) {
-              if input.output.address.payment_credential == Script(own_policy_id) {
-                assets.quantity_of(
-                  input.output.value,
-                  details.billable_unit,
-                  details.billable_unit_name,
-                ) + total
-              } else {
-                0 + total
-              }
-            },
-          )
+          if collection_currency_ada {
+            ada_total
+          } else {
+            list.foldl(
+              inputs,
+              0,
+              fn(input, total) {
+                if input.output.address.payment_credential == Script(
+                  own_policy_id,
+                ) {
+                  assets.quantity_of(
+                    input.output.value,
+                    details.billable_unit,
+                    details.billable_unit_name,
+                  ) + total
+                } else {
+                  total
+                }
+              },
+            )
+          }
         expect
           assets.quantity_of(
             contract_change.value,
@@ -196,26 +214,12 @@ validator subscriptor(
             details.billable_unit_name,
           ) == contract_input_total - platform_collectable - details.billable_amount
         let no_ada_received_from_tx_initiator =
-          if details.billable_unit == assets.ada_policy_id {
+          if collection_currency_ada {
             True
           } else {
-            let input_ada =
-              list.foldl(
-                inputs,
-                0,
-                fn(input, total) {
-                  if input.output.address.payment_credential == Script(
-                    own_policy_id,
-                  ) {
-                    assets.lovelace_of(input.output.value) + total
-                  } else {
-                    0 + total
-                  }
-                },
-              )
             let platform_ada = assets.lovelace_of(platform_output.value)
             let merchant_ada = assets.lovelace_of(merchant_output.value)
-            assets.lovelace_of(contract_change.value) == input_ada - platform_ada - merchant_ada
+            assets.lovelace_of(contract_change.value) == ada_total - platform_ada - merchant_ada
           }
         expect no_ada_received_from_tx_initiator
 
@@ -272,12 +276,8 @@ validator subscriptor(
 
     when rdmr is {
       MintAnchor -> {
-        // requirement: anchor asset name must start with CIP68 prefix
         let cip_68_reference_prefixed =
-          when bytearray.index_of(minted_asset_name, #"000643b0") is {
-            Some((0, _)) -> True
-            _other -> False
-          }
+          bytearray.take(minted_asset_name, 4) == #"000643b0"
 
         // requirement: anchor needs to go to a UTXO at this script's address, in the form of an inline datum. There should only be 1 output datum across all the outputs
         expect [Output { datum: InlineDatum(output_datum), .. }] =
@@ -291,12 +291,10 @@ validator subscriptor(
         trace new_subscription_details.lock_until
         trace upper_range_value
 
-        // expect the platform fee schedule to be in the reference inputs
-        expect [platform_input] =
-          list.filter(
+        expect Some(platform_input) =
+          list.find(
             reference_inputs,
             fn(input) {
-              // "PlatformFeeSchedule", prefixed with CIP-68 reference token identifier
               assets.quantity_of(
                 input.output.value,
                 platform_policy_id,
