@@ -50,4 +50,39 @@ One clean integration that makes both projects stronger and gives Cardano someth
 
 ---
 
-This is the high-level framing. We can add a one-page technical appendix if Kasey wants to go deeper, but the pitch itself stays at this altitude.
+## Appendix: Technical Approach (High-Level Sketch)
+
+### Architecture Split
+- **Subscriptor**: Retains a minimal, persistent anchor datum (lock_until, usage_counter / remaining_balance, version, schedule params). Validator logic shrinks to state transition rules only (e.g., “new lock time must advance correctly,” version check, basic safety bounds). No more hard-coded merchant_vk, fixed amounts, or rate calculations.
+- **Bullet**: Becomes the policy layer. Introduces a new `ReusableRecurring` (or `NonDestructive`) intention type that does **not** consume the nonce on each use. User signs once; the intent carries all collection rules as constraints.
+
+### Key Bullet Mechanisms Leveraged
+- `RefConVal` + `datum_field` path selection: Pulls live values (usage, rate, balance) from the Subscriptor anchor datum into `temp_val` without spending it.
+- `SomeTwo((policy, asset))` dynamic value constraints: Lets output amounts be computed at fulfillment time from `temp_val` (e.g., usage × rate, capped).
+- `AfterVal` / `BeforeVal` + `RedeemerVal`: Time locks and oracle/usage-proof injection.
+- Reusable intent + versioned datum: Platform or solver can update policy (new cap, new merchant, pause flag) by publishing a superseding signed intent; old one is rejected on version mismatch.
+- Aggregation & `intentionGroups`: Hundreds of collections batched into one tx while still honoring per-user policies.
+
+### Example Flow: Low-Balance Auto Top-Up
+1. User creates Subscriptor subscription (thin datum) and signs two separate Bullet intents:
+   - Intent A (recurring collection): “Pull usage × rate (capped) to merchant after lock_until, update datum version + balance.”
+   - Intent B (top-up): “If remaining_balance < threshold after collection, also pull from my yield position and top up the anchor.”
+2. At collection time the platform/solver sees both active intents for the same anchor.
+3. It builds one tx that:
+   - References the Subscriptor anchor as reference input.
+   - Includes both signed intents.
+   - Bullet constraint engine validates Intent A (calculates pull amount via temp_val), then Intent B (sees low balance, adds top-up legs).
+   - Subscriptor validator only confirms the final state transition is valid.
+4. User experiences one seamless collection + top-up; never signs again unless they change the policy.
+
+### What Needs to Be Built
+- New reusable/non-destructive intention variant in Bullet’s `intention_auth` validator and off-chain types.
+- Minor Subscriptor validator update to accept an intent reference + version check instead of embedded merchant_vk/amount fields.
+- Off-chain platform changes: intent storage, policy versioning UI, solver-friendly submission path.
+- (Optional) CIP-level standardization of the reusable recurring intent pattern so other protocols can reuse it.
+
+This keeps Subscriptor focused on reliable state and lets Bullet handle the expressive, composable permission layer — exactly the division of labor needed for a production-grade Cardano account abstraction stack.
+
+---
+
+*Ready for Kasey. Safe sailing.*
